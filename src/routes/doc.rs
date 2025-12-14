@@ -4,12 +4,15 @@ use utoipa_scalar::{Scalar, Servable};
 use crate::{
     models::{User, Product, Favorite, CartItem, Order, OrderItem},
     response::{ApiResponse, Meta},
-    routes::{ products},
+    routes::{ products, auth},
+    
 };
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        auth::login,
+        auth::register,
         products::list_products,
         products::create_product,
         products::get_product,
