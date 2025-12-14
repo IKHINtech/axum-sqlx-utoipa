@@ -4,11 +4,16 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use std::net::SocketAddr;
 
-use crate::{config::AppConfig, db::create_pool, routes::{create_api_router, doc::scalar_docs}};
+use crate::{
+    config::AppConfig,
+    db::create_pool,
+    routes::{create_api_router, doc::scalar_docs},
+};
 
 mod config;
 mod db;
 mod error;
+mod middleware;
 mod models;
 mod response;
 mod routes;

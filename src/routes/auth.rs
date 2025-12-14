@@ -1,11 +1,11 @@
 use argon2::{
-    password_hash::{PasswordHash, PasswordVerifier, SaltString},
     Argon2, PasswordHasher,
+    password_hash::{PasswordHash, PasswordVerifier, SaltString},
 };
 use axum::{Json, Router, extract::State, routing::post};
 use chrono::{Duration, Utc};
+use jsonwebtoken::{EncodingKey, Header, encode};
 use password_hash::rand_core::OsRng;
-use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -34,10 +34,10 @@ pub struct LoginResponse {
     pub token: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-struct Claims {
-    sub: String,
-    exp: usize,
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct Claims {
+    pub sub: String,
+    pub exp: usize,
 }
 
 pub fn router() -> Router<DbPool> {
