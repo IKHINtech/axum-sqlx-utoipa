@@ -2,17 +2,20 @@ use utoipa::{OpenApi, openapi::OpenApi as OpenApiSpec};
 use utoipa_scalar::{Scalar, Servable};
 
 use crate::{
-    models::{User, Product, Favorite, CartItem, Order, OrderItem},
+    models::{CartItem, Favorite, Order, OrderItem, Product, User},
     response::{ApiResponse, Meta},
-    routes::{ products, auth},
-    
+    routes::{auth, cart, health, products},
 };
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        health::health_check,
         auth::login,
         auth::register,
+        cart::cart_list,
+        cart::add_to_cart,
+        cart::remove_from_cart,
         products::list_products,
         products::create_product,
         products::get_product,
