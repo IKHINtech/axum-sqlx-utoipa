@@ -4,7 +4,7 @@ use utoipa_scalar::{Scalar, Servable};
 use crate::{
     models::{CartItem, Favorite, Order, OrderItem, Product, User},
     response::{ApiResponse, Meta},
-    routes::{auth, cart, health, products},
+    routes::{auth, cart, health, orders, products},
 };
 
 #[derive(OpenApi)]
@@ -21,6 +21,9 @@ use crate::{
         products::get_product,
         products::update_product,
         products::delete_product,
+        orders::list_order,
+        orders::checkout,
+        orders::get_order,
     ),
     components(
         schemas(
