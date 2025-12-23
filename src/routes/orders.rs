@@ -55,9 +55,125 @@ pub async fn list_order(
     let data = OrderList { items: orders };
     Ok(Json(ApiResponse::success("Ok", data, Some(meta))))
 }
+
+#[derive(sqlx::FromRow)]
+pub struct CartProductRow {
+    product_id: Uuid,
+    quantity: i32,
+    price: i64,
+    stock: i32,
+}
 #[utoipa::path(post, path = "/orders/checkout", tag = "Orders")]
-pub async fn checkout() -> String {
-    "checkout".to_string()
+pub async fn checkout(
+    State(pool): State<DbPool>,
+    user: AuthUser,
+) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
+    let mut tx = pool.begin().await?;
+
+    // ambil cart + info produk untuk user ini
+    let rows = sqlx::query_as::<_, CartProductRow>(
+        r#"
+        SELECT ci.product_id, ci.quantity, p.price, p.stock
+        FROM cart_items ci
+        JOIN products p ON p.id = ci.product_id
+        WHERE ci.user_id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(user.user_id)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    if rows.is_empty() {
+        return Err(AppError::BadRequest("Cart is empty".into()));
+    }
+
+    // cek stok & hitung total
+    let mut total_amount: i64 = 0;
+    for row in &rows {
+        if row.quantity <= 0 {
+            return Err(AppError::BadRequest("Cart has invalid quantity".into()));
+        }
+        if row.stock < row.quantity {
+            return Err(AppError::BadRequest(format!(
+                "Insufficient stock for product {}",
+                row.product_id
+            )));
+        }
+        total_amount += row.price * (row.quantity as i64);
+    }
+
+    let order_id = Uuid::new_v4();
+
+    // insert order
+    let order = sqlx::query_as::<_, Order>(
+        r#"
+        INSERT INTO orders (id, user_id, total_amount, status)
+        VALUES ($1, $2, $3, 'pending')
+        RETURNING *
+        "#,
+    )
+    .bind(order_id)
+    .bind(user.user_id)
+    .bind(total_amount)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // insert order items & update stok
+    let mut order_items: Vec<OrderItem> = Vec::new();
+
+    for row in &rows {
+        let item_id = Uuid::new_v4();
+
+        let item = sqlx::query_as::<_, OrderItem>(
+            r#"
+            INSERT INTO order_items (id, order_id, product_id, quantity, price)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *
+            "#,
+        )
+        .bind(item_id)
+        .bind(order.id)
+        .bind(row.product_id)
+        .bind(row.quantity)
+        .bind(row.price)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        order_items.push(item);
+
+        // kurangi stok produk
+        sqlx::query(
+            r#"
+            UPDATE products
+            SET stock = stock - $2
+            WHERE id = $1
+            "#,
+        )
+        .bind(row.product_id)
+        .bind(row.quantity)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    // kosongkan cart user
+    sqlx::query("DELETE FROM cart_items WHERE user_id = $1")
+        .bind(user.user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+
+    let data = OrderWithItems {
+        order,
+        items: order_items,
+    };
+
+    Ok(Json(ApiResponse::success(
+        "Checkout success",
+        data,
+        Some(Meta::empty()),
+    )))
 }
 
 #[utoipa::path(get, path = "/orders/{id}", tag = "Orders")]
