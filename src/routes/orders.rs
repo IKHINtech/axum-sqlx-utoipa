@@ -33,7 +33,14 @@ pub fn route() -> Router<DbPool> {
         .route("/{id}", get(get_order))
 }
 
-#[utoipa::path(get, path = "/orders", tag = "Orders")]
+#[utoipa::path(
+    get,
+    path = "/api/orders",
+    responses(
+        (status = 200, description = "List orders for current user", body = ApiResponse<OrderList>)
+    ),
+    tag = "orders"
+)]
 pub async fn list_order(
     State(db): State<DbPool>,
     user: AuthUser,
@@ -63,7 +70,15 @@ pub struct CartProductRow {
     price: i64,
     stock: i32,
 }
-#[utoipa::path(post, path = "/orders/checkout", tag = "Orders")]
+#[utoipa::path(
+    post,
+    path = "/api/orders/checkout", 
+    responses(
+        (status = 200, description = "Checkout current cart into an order", body = ApiResponse<OrderWithItems>),
+        (status = 400, description = "Cart empty or validation error"),
+    )
+    , tag = "Orders"
+)]
 pub async fn checkout(
     State(pool): State<DbPool>,
     user: AuthUser,
@@ -176,7 +191,18 @@ pub async fn checkout(
     )))
 }
 
-#[utoipa::path(get, path = "/orders/{id}", tag = "Orders")]
+#[utoipa::path(
+    get,
+    path = "/api/orders/{id}",
+    params(
+        ("id" = Uuid, Path, description = "Order ID")
+    ),
+    responses(
+        (status = 200, description = "Get order with items", body = ApiResponse<OrderWithItems>),
+        (status = 404, description = "Order not found"),
+    ),
+    tag = "orders"
+)]
 pub async fn get_order(
     State(db): State<DbPool>,
     user: AuthUser,
