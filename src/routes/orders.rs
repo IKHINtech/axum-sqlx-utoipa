@@ -11,7 +11,7 @@ use crate::{
     db::DbPool,
     error::{AppError, AppResult},
     middleware::auth::AuthUser,
-    models::{Order, OrderItem, Product},
+    models::{Order, OrderItem},
     response::{ApiResponse, Meta},
 };
 
