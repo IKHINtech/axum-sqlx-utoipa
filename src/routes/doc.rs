@@ -4,7 +4,7 @@ use utoipa_scalar::{Scalar, Servable};
 use crate::{
     models::{CartItem, Favorite, Order, OrderItem, Product, User},
     response::{ApiResponse, Meta},
-    routes::{auth, cart, health, orders, products},
+    routes::{admin, auth, cart, health, orders, products},
 };
 
 #[derive(OpenApi)]
@@ -24,6 +24,8 @@ use crate::{
         orders::list_order,
         orders::checkout,
         orders::get_order,
+        admin::list_all_orders,
+        admin::get_order_admin
     ),
     components(
         schemas(
@@ -41,6 +43,10 @@ use crate::{
     tags(
         (name = "health", description = "Health check endpoint"),
         (name = "products", description = "Product endpoints"),
+        (name = "cart", description = "Cart endpoints"),
+        (name = "orders", description = "Order endpoints"),
+        (name = "admin", description = "Admin endpoints"),
+        (name = "auth", description = "Authentication endpoints"),
     )
 )]
 pub struct ApiDoc;

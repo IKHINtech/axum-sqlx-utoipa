@@ -2,6 +2,7 @@ use axum::Router;
 
 use crate::db::DbPool;
 
+pub mod admin;
 pub mod auth;
 pub mod cart;
 pub mod doc;
@@ -16,4 +17,5 @@ pub fn create_api_router() -> Router<DbPool> {
         .nest("/auth", auth::router())
         .nest("/cart", cart::router())
         .nest("/orders", orders::route())
+        .nest("/admin", admin::router())
 }

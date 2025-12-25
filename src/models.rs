@@ -9,6 +9,7 @@ pub struct User {
     pub email: String,
     pub password_hash: String,
     pub created_at: DateTime<Utc>,
+    pub role: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]

@@ -37,6 +37,7 @@ pub struct LoginResponse {
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct Claims {
     pub sub: String,
+    pub role: String,
     pub exp: usize,
 }
 
@@ -134,6 +135,7 @@ pub async fn login(
 
     let claims = Claims {
         sub: user.id.to_string(),
+        role: user.role.clone(),
         exp: expiration.timestamp() as usize,
     };
 

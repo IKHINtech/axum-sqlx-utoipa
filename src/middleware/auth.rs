@@ -7,6 +7,7 @@ use crate::{error::AppError, routes::auth::Claims};
 #[derive(Debug, Clone)]
 pub struct AuthUser {
     pub user_id: Uuid,
+    pub role: String,
 }
 
 impl<S> FromRequestParts<S> for AuthUser
@@ -45,6 +46,9 @@ where
         let user_id = Uuid::parse_str(&decoded.claims.sub)
             .map_err(|_| AppError::BadRequest("Invalid user id in token".into()))?;
 
-        Ok(AuthUser { user_id })
+        Ok(AuthUser {
+            user_id,
+            role: decoded.claims.role.clone(),
+        })
     }
 }
