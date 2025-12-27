@@ -4,7 +4,7 @@ use utoipa_scalar::{Scalar, Servable};
 use crate::{
     models::{CartItem, Favorite, Order, OrderItem, Product, User},
     response::{ApiResponse, Meta},
-    routes::{admin, auth, cart, favorites, health, orders, products},
+    routes::{admin, auth, cart, favorites, health, orders, params, products},
 };
 
 #[derive(OpenApi)]
@@ -23,9 +23,13 @@ use crate::{
         products::delete_product,
         orders::list_order,
         orders::checkout,
+        orders::pay_order,
         orders::get_order,
         admin::list_all_orders,
         admin::get_order_admin,
+        admin::update_order_status,
+        admin::list_low_stock,
+        admin::adjust_inventory,
         favorites::add_favorite,
         favorites::remove_favorite,
         favorites::list_favorites
@@ -38,9 +42,31 @@ use crate::{
             CartItem,
             Order,
             OrderItem,
+            admin::ProductList,
+            admin::UpdateOrderStatusRequest,
+            admin::InventoryAdjustRequest,
+            admin::LowStockQuery,
+            cart::CartList,
+            favorites::FavoriteProductList,
+            orders::OrderList,
+            orders::OrderWithItems,
+            params::Pagination,
+            params::ProductQuery,
+            params::OrderListQuery,
+            products::ProductList,
             Meta,
             ApiResponse<Product>,
-            ApiResponse<products::ProductList>
+            ApiResponse<products::ProductList>,
+            ApiResponse<orders::OrderWithItems>,
+            ApiResponse<orders::OrderList>,
+            ApiResponse<admin::ProductList>
+        ),
+        security_schemes(
+            ("bearer_auth" = {
+                type = "http",
+                scheme = "bearer",
+                bearer_format = "JWT"
+            })
         )
     ),
     tags(
@@ -50,6 +76,7 @@ use crate::{
         (name = "Orders", description = "Order endpoints"),
         (name = "Admin", description = "Admin endpoints"),
         (name = "Auth", description = "Authentication endpoints"),
+        (name = "Favorites", description = "Favorite endpoints"),
     )
 )]
 pub struct ApiDoc;

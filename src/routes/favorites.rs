@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -8,11 +8,13 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    audit::log_audit,
     db::DbPool,
     error::{AppError, AppResult},
     middleware::auth::AuthUser,
     models::{Favorite, Product},
     response::{ApiResponse, Meta},
+    routes::params::Pagination,
 };
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -31,17 +33,17 @@ pub fn router() -> Router<DbPool> {
 }
 
 #[utoipa::path(
-    post,
-    path = "/favorites",
-    tag = "favorites",
-    operation_id = "add_favorite",
-    request_body = AddFavoriteRequest,
+    delete,
+    path = "/api/favorites/{product_id}",
+    params(
+        ("product_id" = Uuid, Path, description = "Product ID")
+    ),
     responses(
-        (status = 200, description = "OK", body = ApiResponse<Favorite>),
-        (status = 400, description = "Bad Request", body = ApiResponse<serde_json::Value>),
-        (status = 401, description = "Unauthorized", body = ApiResponse<serde_json::Value>),
-        (status = 404, description = "Not Found", body = ApiResponse<serde_json::Value>),
-    )
+        (status = 200, description = "Removed from favorites", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Favorite not found")
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Favorites"
 )]
 pub async fn remove_favorite(
     State(pool): State<DbPool>,
@@ -58,6 +60,18 @@ pub async fn remove_favorite(
         return Err(AppError::NotFound);
     }
 
+    if let Err(err) = log_audit(
+        &pool,
+        Some(user.user_id),
+        "favorite_remove",
+        Some("favorites"),
+        Some(serde_json::json!({ "product_id": product_id })),
+    )
+    .await
+    {
+        tracing::warn!(error = %err, "audit log failed");
+    }
+
     Ok(Json(ApiResponse::success(
         "Removed from favorites",
         serde_json::json!({}),
@@ -67,19 +81,23 @@ pub async fn remove_favorite(
 
 #[utoipa::path(
     get,
-    path = "/favorites",
-    tag = "favorites",
-    operation_id = "list_favorites",
+    path = "/api/favorites",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number, default 1"),
+        ("per_page" = Option<i64>, Query, description = "Items per page, default 20")
+    ),
     responses(
-        (status = 200, description = "OK", body = ApiResponse<FavoriteProductList>),
-        (status = 401, description = "Unauthorized", body = ApiResponse<serde_json::Value>),
-        (status = 404, description = "Not Found", body = ApiResponse<serde_json::Value>),
-    )
+        (status = 200, description = "List favorites", body = ApiResponse<FavoriteProductList>)
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Favorites"
 )]
 pub async fn list_favorites(
     State(db): State<DbPool>,
     user: AuthUser,
+    Query(pagination): Query<Pagination>,
 ) -> AppResult<Json<ApiResponse<FavoriteProductList>>> {
+    let (page, limit, offset) = pagination.normalize();
     let products = sqlx::query_as::<_, Product>(
         r#"
         SELECT p.*
@@ -87,9 +105,12 @@ pub async fn list_favorites(
         JOIN products p ON p.id = f.product_id
         WHERE f.user_id = $1
         ORDER BY f.created_at DESC
+        LIMIT $2 OFFSET $3
         "#,
     )
     .bind(user.user_id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&db)
     .await?;
 
@@ -98,7 +119,7 @@ pub async fn list_favorites(
         .fetch_one(&db)
         .await?;
 
-    let meta = Meta::new(1, total.0, total.0);
+    let meta = Meta::new(page, limit, total.0);
 
     let data = FavoriteProductList { items: products };
 
@@ -107,16 +128,15 @@ pub async fn list_favorites(
 
 #[utoipa::path(
     post,
-    path = "/favorites/{product_id}",
-    tag = "favorites",
-    operation_id = "add_favorite",
+    path = "/api/favorites",
     request_body = AddFavoriteRequest,
     responses(
-        (status = 200, description = "OK", body = ApiResponse<Favorite>),
-        (status = 400, description = "Bad Request", body = ApiResponse<serde_json::Value>),
-        (status = 401, description = "Unauthorized", body = ApiResponse<serde_json::Value>),
-        (status = 404, description = "Not Found", body = ApiResponse<serde_json::Value>),
-    )
+        (status = 200, description = "Added to favorites", body = ApiResponse<Favorite>),
+        (status = 400, description = "Bad Request"),
+        (status = 404, description = "Not Found")
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Favorites"
 )]
 pub async fn add_favorite(
     State(pool): State<DbPool>,
@@ -158,6 +178,18 @@ pub async fn add_favorite(
         .fetch_one(&pool)
         .await?
     };
+
+    if let Err(err) = log_audit(
+        &pool,
+        Some(user.user_id),
+        "favorite_add",
+        Some("favorites"),
+        Some(serde_json::json!({ "product_id": payload.product_id })),
+    )
+    .await
+    {
+        tracing::warn!(error = %err, "audit log failed");
+    }
 
     Ok(Json(ApiResponse::success(
         "Added to favorites",

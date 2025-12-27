@@ -10,6 +10,17 @@ pub struct AuthUser {
     pub role: String,
 }
 
+pub fn ensure_role(user: &AuthUser, role: &str) -> Result<(), AppError> {
+    if user.role != role {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
+}
+
+pub fn ensure_admin(user: &AuthUser) -> Result<(), AppError> {
+    ensure_role(user, "admin")
+}
+
 impl<S> FromRequestParts<S> for AuthUser
 where
     S: Send + Sync,

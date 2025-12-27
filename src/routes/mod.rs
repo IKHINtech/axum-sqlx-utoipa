@@ -9,6 +9,7 @@ pub mod doc;
 pub mod favorites;
 pub mod health;
 pub mod orders;
+pub mod params;
 pub mod products;
 
 // Build the API router without binding state; it will be provided at the top level.

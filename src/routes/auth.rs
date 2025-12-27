@@ -11,6 +11,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    audit::log_audit,
     db::DbPool,
     error::{AppError, AppResult},
     models::User,
@@ -54,7 +55,7 @@ pub fn router() -> Router<DbPool> {
     responses(
         (status = 201, description = "Register user", body = ApiResponse<User>)
     ),
-    tag = "auth"
+    tag = "Auth"
 )]
 pub async fn register(
     State(pool): State<DbPool>,
@@ -87,6 +88,17 @@ pub async fn register(
     .bind(password_hash)
     .fetch_one(&pool)
     .await?;
+    if let Err(err) = log_audit(
+        &pool,
+        Some(user.id),
+        "user_register",
+        Some("users"),
+        Some(serde_json::json!({ "user_id": user.id })),
+    )
+    .await
+    {
+        tracing::warn!(error = %err, "audit log failed");
+    }
     Ok(Json(ApiResponse::success("User created", user, None)))
 }
 
@@ -98,7 +110,7 @@ pub async fn register(
         (status = 200, description = "Login user", body = ApiResponse<LoginResponse>),
         (status = 400, description = "Invalid credentials")
     ),
-    tag = "auth"
+    tag = "Auth"
 )]
 pub async fn login(
     State(pool): State<DbPool>,
@@ -149,6 +161,18 @@ pub async fn login(
     let resp = LoginResponse {
         token: format!("Bearer {}", token),
     };
+
+    if let Err(err) = log_audit(
+        &pool,
+        Some(user.id),
+        "user_login",
+        Some("users"),
+        Some(serde_json::json!({ "user_id": user.id })),
+    )
+    .await
+    {
+        tracing::warn!(error = %err, "audit log failed");
+    }
 
     Ok(Json(ApiResponse::success(
         "Logged in",

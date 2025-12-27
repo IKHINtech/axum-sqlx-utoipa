@@ -1,16 +1,20 @@
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use serde::{Deserialize, Serialize};
+use sqlx::QueryBuilder;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    audit::log_audit,
     db::DbPool,
     error::{AppError, AppResult},
+    middleware::auth::{AuthUser, ensure_admin},
     models::Product,
     response::{ApiResponse, Meta},
+    routes::params::{ProductQuery, ProductSortBy, SortOrder},
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -48,30 +52,87 @@ pub fn router() -> Router<DbPool> {
     path = "/api/products",
     params(
         ("page" = Option<i64>, Query, description = "Page number, default 1"),
-        ("per_page" = Option<i64>, Query, description = "Items per page, default 10"),
+        ("per_page" = Option<i64>, Query, description = "Items per page, default 20"),
+        ("q" = Option<String>, Query, description = "Search term for name/description"),
+        ("min_price" = Option<i64>, Query, description = "Minimum price"),
+        ("max_price" = Option<i64>, Query, description = "Maximum price"),
+        ("sort_by" = Option<String>, Query, description = "Sort by: created_at, price, name"),
+        ("sort_order" = Option<String>, Query, description = "Sort order: asc, desc")
     ),
     responses(
         (status = 200, description = "List products", body = ApiResponse<ProductList>)
     ),
-    tag = "products"
+    tag = "Products"
 )]
 pub async fn list_products(
     State(pool): State<DbPool>,
+    Query(query): Query<ProductQuery>,
 ) -> AppResult<Json<ApiResponse<ProductList>>> {
-    let page = 1_i64;
-    let limit = 10_i64;
-    let offset = (page - 1) * limit;
-    let items = sqlx::query_as::<_, Product>(
-        "SELECT * FROM products order by created_at LIMIT $1 OFFSET $2",
-    )
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(&pool)
-    .await?;
+    let (page, limit, offset) = query.pagination.normalize();
+    let mut list_builder = QueryBuilder::new("SELECT * FROM products");
+    let mut count_builder = QueryBuilder::new("SELECT COUNT(*) FROM products");
+    let mut has_where = false;
 
-    let total: (i64,) = sqlx::query_as("SELECT count(*) FROM products")
-        .fetch_one(&pool)
+    if let Some(search) = query.q.as_ref().filter(|s| !s.is_empty()) {
+        let pattern = format!("%{}%", search);
+        let clause = " WHERE (name ILIKE ";
+        list_builder.push(clause).push_bind(&pattern);
+        list_builder
+            .push(" OR COALESCE(description, '') ILIKE ")
+            .push_bind(&pattern)
+            .push(")");
+        count_builder.push(clause).push_bind(&pattern);
+        count_builder
+            .push(" OR COALESCE(description, '') ILIKE ")
+            .push_bind(&pattern)
+            .push(")");
+        has_where = true;
+    }
+
+    if let Some(min_price) = query.min_price {
+        let clause = if has_where { " AND " } else { " WHERE " };
+        list_builder
+            .push(clause)
+            .push("price >= ")
+            .push_bind(min_price);
+        count_builder
+            .push(clause)
+            .push("price >= ")
+            .push_bind(min_price);
+        has_where = true;
+    }
+
+    if let Some(max_price) = query.max_price {
+        let clause = if has_where { " AND " } else { " WHERE " };
+        list_builder
+            .push(clause)
+            .push("price <= ")
+            .push_bind(max_price);
+        count_builder
+            .push(clause)
+            .push("price <= ")
+            .push_bind(max_price);
+        has_where = true;
+    }
+
+    let sort_by = query.sort_by.unwrap_or(ProductSortBy::CreatedAt);
+    let sort_order = query.sort_order.unwrap_or(SortOrder::Desc);
+    list_builder
+        .push(" ORDER BY ")
+        .push(sort_by.as_sql())
+        .push(" ")
+        .push(sort_order.as_sql())
+        .push(" LIMIT ")
+        .push_bind(limit)
+        .push(" OFFSET ")
+        .push_bind(offset);
+
+    let items = list_builder
+        .build_query_as::<Product>()
+        .fetch_all(&pool)
         .await?;
+
+    let total: (i64,) = count_builder.build_query_as().fetch_one(&pool).await?;
 
     let meta = Meta::new(page, limit, total.0);
     let data = ProductList { items };
@@ -87,7 +148,7 @@ pub async fn list_products(
         (status = 200, description = "Get product", body = ApiResponse<Product>),
         (status = 404, description = "Product not found"),
     ),
-    tag = "products"
+    tag = "Products"
 )]
 
 pub async fn get_product(
@@ -111,13 +172,16 @@ pub async fn get_product(
     responses(
         (status = 201, description = "Create product", body = ApiResponse<Product>)
     ),
-    tag = "products"
+    security(("bearer_auth" = [])),
+    tag = "Products"
 )]
 
 pub async fn create_product(
     State(pool): State<DbPool>,
+    user: AuthUser,
     Json(payload): Json<CreateProductRequest>,
 ) -> AppResult<Json<ApiResponse<Product>>> {
+    ensure_admin(&user)?;
     let id = Uuid::new_v4();
     let product = sqlx::query_as::<_, Product>(
         "INSERT INTO products (id, name, description, price, stock) VALUES ($1, $2, $3, $4, $5) RETURNING *",
@@ -129,6 +193,18 @@ pub async fn create_product(
     .bind(payload.stock)
     .fetch_one(&pool)
     .await?;
+
+    if let Err(err) = log_audit(
+        &pool,
+        Some(user.user_id),
+        "product_create",
+        Some("products"),
+        Some(serde_json::json!({ "product_id": product.id })),
+    )
+    .await
+    {
+        tracing::warn!(error = %err, "audit log failed");
+    }
 
     Ok(Json(ApiResponse::success(
         "Product created",
@@ -146,14 +222,17 @@ pub async fn create_product(
     responses(
         (status = 200, description = "Updated product", body = ApiResponse<Product>)
     ),
-    tag = "products"
+    security(("bearer_auth" = [])),
+    tag = "Products"
 )]
 
 pub async fn update_product(
     State(pool): State<DbPool>,
+    user: AuthUser,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateProductRequest>,
 ) -> AppResult<Json<ApiResponse<Product>>> {
+    ensure_admin(&user)?;
     let existing = sqlx::query_as::<_, Product>("SELECT * FROM products WHERE id = $1")
         .bind(id)
         .fetch_optional(&pool)
@@ -184,6 +263,18 @@ pub async fn update_product(
     .fetch_one(&pool)
     .await?;
 
+    if let Err(err) = log_audit(
+        &pool,
+        Some(user.user_id),
+        "product_update",
+        Some("products"),
+        Some(serde_json::json!({ "product_id": product.id })),
+    )
+    .await
+    {
+        tracing::warn!(error = %err, "audit log failed");
+    }
+
     Ok(Json(ApiResponse::success(
         "Updated",
         product,
@@ -199,13 +290,16 @@ pub async fn update_product(
     responses(
         (status = 204, description = "Deleted product")
     ),
-    tag = "products"
+    security(("bearer_auth" = [])),
+    tag = "Products"
 )]
 
 pub async fn delete_product(
     State(pool): State<DbPool>,
+    user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
+    ensure_admin(&user)?;
     let result = sqlx::query("DELETE FROM products WHERE id = $1")
         .bind(id)
         .execute(&pool)
@@ -213,6 +307,18 @@ pub async fn delete_product(
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
+    }
+
+    if let Err(err) = log_audit(
+        &pool,
+        Some(user.user_id),
+        "product_delete",
+        Some("products"),
+        Some(serde_json::json!({ "product_id": id })),
+    )
+    .await
+    {
+        tracing::warn!(error = %err, "audit log failed");
     }
 
     Ok(Json(ApiResponse::success(

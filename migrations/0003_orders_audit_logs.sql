@@ -1,0 +1,24 @@
+ALTER TABLE orders
+ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid',
+ADD COLUMN IF NOT EXISTS invoice_number TEXT UNIQUE,
+ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+UPDATE orders
+SET invoice_number = CONCAT('INV-', TO_CHAR(created_at, 'YYYYMMDD'), '-', SUBSTRING(id::text, 1, 8))
+WHERE invoice_number IS NULL;
+
+ALTER TABLE orders
+ALTER COLUMN invoice_number SET NOT NULL;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id uuid PRIMARY KEY,
+    user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    resource TEXT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE order_items
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();

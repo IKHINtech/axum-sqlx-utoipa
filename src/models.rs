@@ -35,7 +35,7 @@ pub struct CartItem {
     pub id: Uuid,
     pub product_id: Uuid,
     pub user_id: Uuid,
-    pub quantity: i64,
+    pub quantity: i32,
     pub created_at: DateTime<Utc>,
 }
 
@@ -45,7 +45,11 @@ pub struct Order {
     pub user_id: Uuid,
     pub total_amount: i64,
     pub status: String,
+    pub payment_status: String,
+    pub invoice_number: String,
+    pub paid_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
@@ -53,6 +57,7 @@ pub struct OrderItem {
     pub id: Uuid,
     pub order_id: Uuid,
     pub product_id: Uuid,
-    pub quprice: i64,
+    pub quantity: i32,
+    pub price: i64,
     pub created_at: DateTime<Utc>,
 }
