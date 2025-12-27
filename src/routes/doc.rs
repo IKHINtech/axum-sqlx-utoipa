@@ -44,12 +44,12 @@ use crate::{
         )
     ),
     tags(
-        (name = "health", description = "Health check endpoint"),
-        (name = "products", description = "Product endpoints"),
-        (name = "cart", description = "Cart endpoints"),
-        (name = "orders", description = "Order endpoints"),
-        (name = "admin", description = "Admin endpoints"),
-        (name = "auth", description = "Authentication endpoints"),
+        (name = "Health", description = "Health check endpoint"),
+        (name = "Products", description = "Product endpoints"),
+        (name = "Cart", description = "Cart endpoints"),
+        (name = "Orders", description = "Order endpoints"),
+        (name = "Admin", description = "Admin endpoints"),
+        (name = "Auth", description = "Authentication endpoints"),
     )
 )]
 pub struct ApiDoc;

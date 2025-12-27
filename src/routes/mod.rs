@@ -19,4 +19,5 @@ pub fn create_api_router() -> Router<DbPool> {
         .nest("/cart", cart::router())
         .nest("/orders", orders::route())
         .nest("/admin", admin::router())
+        .nest("/favorites", favorites::router())
 }
