@@ -6,6 +6,7 @@ pub mod admin;
 pub mod auth;
 pub mod cart;
 pub mod doc;
+pub mod favorites;
 pub mod health;
 pub mod orders;
 pub mod products;
