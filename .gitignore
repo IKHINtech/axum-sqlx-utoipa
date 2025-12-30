@@ -1,2 +1,22 @@
 /target
 .env
+/.env.*
+!.env.example
+/target/
+**/*.rs.bk
+Cargo.lock
+*.log
+# SQLx
+/sqlx-data.json
+# IDE/editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+.fleet/
+# Rust tools
+/bacon.log
+# Runtime artifacts
+/tmp/
+/dist/
