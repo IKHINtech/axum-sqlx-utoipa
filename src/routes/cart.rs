@@ -24,7 +24,9 @@ pub struct AddToCartRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(transparent)]
 pub struct CartList {
+    #[schema(value_type=Vec<CartItem>)]
     pub items: Vec<CartItem>,
 }
 

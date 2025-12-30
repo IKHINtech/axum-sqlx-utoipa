@@ -34,7 +34,9 @@ pub struct UpdateProductRequest {
 }
 
 #[derive(Serialize, ToSchema)]
+#[serde(transparent)]
 pub struct ProductList {
+    #[schema(value_type = Vec<Product>)]
     pub items: Vec<Product>,
 }
 

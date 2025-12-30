@@ -7,11 +7,14 @@ default = true
 [[tasks]]
 name = "clippy"
 command = ["cargo", "clippy", "--all-features", "--all-targets", "--", "-D", "warnings"]
+watch = ["src", "Cargo.toml", "Cargo.lock", "migrations"]
 
 [[tasks]]
 name = "test"
 command = ["cargo", "test", "--all-features"]
+watch = ["src", "Cargo.toml", "Cargo.lock", "migrations"]
 
 [[tasks]]
 name = "fmt"
 command = ["cargo", "fmt"]
+watch = ["src", "Cargo.toml", "Cargo.lock", "migrations"]

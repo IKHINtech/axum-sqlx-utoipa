@@ -20,7 +20,9 @@ use crate::{
 };
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct OrderList {
+    #[schema(value_type= Vec<Order>)]
     pub items: Vec<Order>,
 }
 
