@@ -9,7 +9,7 @@ use utoipa::{
 use utoipa_scalar::{Scalar, Servable};
 
 use crate::{
-    dto::{cart::CartList, orders::{OrderList, OrderWithItems}, products},
+    dto::{cart::CartList, favorites::FavoriteProductList, orders::{OrderList, OrderWithItems}, products},
     models::{CartItem, Favorite, Order, OrderItem, Product, User},
     response::{ApiResponse, Meta},
     routes::{admin, auth, cart, favorites, health, orders, params, products as product_routes},
@@ -72,7 +72,7 @@ impl Modify for SecurityAddon {
             admin::InventoryAdjustRequest,
             admin::LowStockQuery,
             CartList,
-            favorites::FavoriteProductList,
+            FavoriteProductList,
             OrderList,
             OrderWithItems,
             params::Pagination,
