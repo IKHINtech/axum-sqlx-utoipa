@@ -8,3 +8,5 @@ pub mod response;
 pub mod routes;
 pub mod dto;
 pub mod services;
+pub mod entity;
+pub mod state;

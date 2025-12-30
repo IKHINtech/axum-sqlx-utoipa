@@ -31,6 +31,7 @@ Axum-based REST API for a lightweight e-commerce backend: products, carts, order
 - Format: `cargo fmt`
 - Make targets: see `Makefile` (`make setup`, `make dev`, `make lint`, `make test`, `make migrate`, `make docker-build`, `make compose-up/down`).
 - Seed sample data: `make seed` (creates admin/user accounts + demo products; runs migrations first).
+- ORM: SQLx in use; SeaORM dependencies/entities added for migration path (see `src/entity/` and `create_orm_conn` in `src/db.rs`).
 
 ## Endpoints (high level)
 - `GET /health` – health check
