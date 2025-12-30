@@ -40,7 +40,7 @@ pub async fn cart_list(
     user: AuthUser,
     Query(pagination): Query<Pagination>,
 ) -> AppResult<Json<ApiResponse<CartList>>> {
-    let resp = cart_service::list_cart(&state.pool, &user, pagination).await?;
+    let resp = cart_service::list_cart(&state, &user, pagination).await?;
     Ok(Json(resp))
 }
 
@@ -60,7 +60,7 @@ pub async fn add_to_cart(
     user: AuthUser,
     Json(payload): Json<AddToCartRequest>,
 ) -> AppResult<Json<ApiResponse<CartItem>>> {
-    let resp = cart_service::add_to_cart(&state.pool, &user, payload).await?;
+    let resp = cart_service::add_to_cart(&state, &user, payload).await?;
     Ok(Json(resp))
 }
 
@@ -83,6 +83,6 @@ pub async fn remove_from_cart(
     auht: AuthUser,
     Path(product_id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
-    let resp = cart_service::remove_from_cart(&state.pool, &auht, product_id).await?;
+    let resp = cart_service::remove_from_cart(&state, &auht, product_id).await?;
     Ok(Json(resp))
 }
