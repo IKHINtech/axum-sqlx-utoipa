@@ -40,7 +40,7 @@ pub async fn remove_favorite(
     user: AuthUser,
     Path(product_id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
-    let resp = favorite_service::remove_favorite(&state.pool, &user, product_id).await?;
+    let resp = favorite_service::remove_favorite(&state, &user, product_id).await?;
     Ok(Json(resp))
 }
 
@@ -62,7 +62,7 @@ pub async fn list_favorites(
     user: AuthUser,
     Query(pagination): Query<Pagination>,
 ) -> AppResult<Json<ApiResponse<FavoriteProductList>>> {
-    let resp = favorite_service::list_favorites(&state.pool, &user, pagination).await?;
+    let resp = favorite_service::list_favorites(&state, &user, pagination).await?;
     Ok(Json(resp))
 }
 
@@ -83,6 +83,6 @@ pub async fn add_favorite(
     user: AuthUser,
     Json(payload): Json<AddFavoriteRequest>,
 ) -> AppResult<Json<ApiResponse<Favorite>>> {
-    let resp = favorite_service::add_favorite(&state.pool, &user, payload).await?;
+    let resp = favorite_service::add_favorite(&state, &user, payload).await?;
     Ok(Json(resp))
 }
