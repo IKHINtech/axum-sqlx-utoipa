@@ -9,9 +9,10 @@ use utoipa::{
 use utoipa_scalar::{Scalar, Servable};
 
 use crate::{
+    dto::{cart::CartList, orders::{OrderList, OrderWithItems}, products},
     models::{CartItem, Favorite, Order, OrderItem, Product, User},
     response::{ApiResponse, Meta},
-    routes::{admin, auth, cart, favorites, health, orders, params, products},
+    routes::{admin, auth, cart, favorites, health, orders, params, products as product_routes},
 };
 
 struct SecurityAddon;
@@ -40,11 +41,11 @@ impl Modify for SecurityAddon {
         cart::cart_list,
         cart::add_to_cart,
         cart::remove_from_cart,
-        products::list_products,
-        products::create_product,
-        products::get_product,
-        products::update_product,
-        products::delete_product,
+        product_routes::list_products,
+        product_routes::create_product,
+        product_routes::get_product,
+        product_routes::update_product,
+        product_routes::delete_product,
         orders::list_order,
         orders::checkout,
         orders::pay_order,
@@ -70,10 +71,10 @@ impl Modify for SecurityAddon {
             admin::UpdateOrderStatusRequest,
             admin::InventoryAdjustRequest,
             admin::LowStockQuery,
-            cart::CartList,
+            CartList,
             favorites::FavoriteProductList,
-            orders::OrderList,
-            orders::OrderWithItems,
+            OrderList,
+            OrderWithItems,
             params::Pagination,
             params::ProductQuery,
             params::OrderListQuery,
@@ -81,8 +82,8 @@ impl Modify for SecurityAddon {
             Meta,
             ApiResponse<Product>,
             ApiResponse<products::ProductList>,
-            ApiResponse<orders::OrderWithItems>,
-            ApiResponse<orders::OrderList>,
+            ApiResponse<OrderWithItems>,
+            ApiResponse<OrderList>,
             ApiResponse<admin::ProductList>
         )
     ),

@@ -16,9 +16,9 @@ use crate::{
     models::{Order, OrderItem, Product},
     response::{ApiResponse, Meta},
     routes::{
-        orders::{OrderList, OrderWithItems},
         params::{OrderListQuery, Pagination, SortOrder},
     },
+    dto::orders::{OrderList, OrderWithItems},
 };
 
 pub fn router() -> Router<DbPool> {

@@ -2,7 +2,7 @@ use axum::{extract::FromRequestParts, http::header};
 use jsonwebtoken::{DecodingKey, Validation, decode};
 use uuid::Uuid;
 
-use crate::{error::AppError, routes::auth::Claims};
+use crate::{dto::auth::Claims, error::AppError};
 
 #[derive(Debug, Clone)]
 pub struct AuthUser {
