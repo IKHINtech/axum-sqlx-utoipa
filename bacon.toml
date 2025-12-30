@@ -1,0 +1,17 @@
+[[tasks]]
+name = "check"
+command = ["cargo", "check", "--all-features", "--all-targets"]
+watch = ["src", "Cargo.toml", "Cargo.lock", "migrations"]
+default = true
+
+[[tasks]]
+name = "clippy"
+command = ["cargo", "clippy", "--all-features", "--all-targets", "--", "-D", "warnings"]
+
+[[tasks]]
+name = "test"
+command = ["cargo", "test", "--all-features"]
+
+[[tasks]]
+name = "fmt"
+command = ["cargo", "fmt"]
