@@ -80,7 +80,7 @@ pub async fn register(
 
     let id = Uuid::new_v4();
 
-    let user = sqlx::query_as(
+    let user: User = sqlx::query_as::<_, User>(
         "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(id)

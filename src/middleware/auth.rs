@@ -23,7 +23,7 @@ pub fn ensure_admin(user: &AuthUser) -> Result<(), AppError> {
 
 impl<S> FromRequestParts<S> for AuthUser
 where
-    S: Send + Sync,
+    S: Send + Sync + 'static,
 {
     type Rejection = AppError;
     async fn from_request_parts(

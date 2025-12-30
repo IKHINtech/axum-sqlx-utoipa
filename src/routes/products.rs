@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Path, Query, State}, routing::{delete, get, post, put},
 };
 use serde::{Deserialize, Serialize};
 use sqlx::QueryBuilder;
@@ -40,11 +40,11 @@ pub struct ProductList {
 
 pub fn router() -> Router<DbPool> {
     Router::new()
-        .route("/", axum::routing::post(create_product))
-        .route("/", axum::routing::get(list_products))
-        .route("/{id}", axum::routing::get(get_product))
-        .route("/{id}", axum::routing::put(update_product))
-        .route("/{id}", axum::routing::delete(delete_product))
+        .route("/", post(create_product))
+        .route("/", get(list_products))
+        .route("/{id}", get(get_product))
+        .route("/{id}", put(update_product))
+        .route("/{id}", delete(delete_product))
 }
 
 #[utoipa::path(
@@ -72,21 +72,27 @@ pub async fn list_products(
     let mut list_builder = QueryBuilder::new("SELECT * FROM products");
     let mut count_builder = QueryBuilder::new("SELECT COUNT(*) FROM products");
     let mut has_where = false;
+    let has_max_price = query.max_price.is_some();
+    let needs_price_filter = query.min_price.is_some() || query.max_price.is_some();
 
     if let Some(search) = query.q.as_ref().filter(|s| !s.is_empty()) {
         let pattern = format!("%{}%", search);
         let clause = " WHERE (name ILIKE ";
-        list_builder.push(clause).push_bind(&pattern);
+        list_builder
+            .push(clause)
+            .push_bind(pattern.clone());
         list_builder
             .push(" OR COALESCE(description, '') ILIKE ")
-            .push_bind(&pattern)
+            .push_bind(pattern.clone())
             .push(")");
-        count_builder.push(clause).push_bind(&pattern);
+        count_builder
+            .push(clause)
+            .push_bind(pattern.clone());
         count_builder
             .push(" OR COALESCE(description, '') ILIKE ")
-            .push_bind(&pattern)
+            .push_bind(pattern)
             .push(")");
-        has_where = true;
+        has_where = needs_price_filter;
     }
 
     if let Some(min_price) = query.min_price {
@@ -99,7 +105,9 @@ pub async fn list_products(
             .push(clause)
             .push("price >= ")
             .push_bind(min_price);
-        has_where = true;
+        if has_max_price {
+            has_where = true;
+        }
     }
 
     if let Some(max_price) = query.max_price {
@@ -112,7 +120,6 @@ pub async fn list_products(
             .push(clause)
             .push("price <= ")
             .push_bind(max_price);
-        has_where = true;
     }
 
     let sort_by = query.sort_by.unwrap_or(ProductSortBy::CreatedAt);

@@ -1,4 +1,11 @@
-use utoipa::{OpenApi, openapi::OpenApi as OpenApiSpec};
+use utoipa::{
+    Modify, OpenApi,
+    openapi::{
+        self,
+        OpenApi as OpenApiSpec,
+        security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+    },
+};
 use utoipa_scalar::{Scalar, Servable};
 
 use crate::{
@@ -6,6 +13,23 @@ use crate::{
     response::{ApiResponse, Meta},
     routes::{admin, auth, cart, favorites, health, orders, params, products},
 };
+
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut openapi::OpenApi) {
+        let components = openapi.components.get_or_insert_with(Default::default);
+        components.add_security_scheme(
+            "bearer_auth",
+            SecurityScheme::Http(
+                HttpBuilder::new()
+                    .scheme(HttpAuthScheme::Bearer)
+                    .bearer_format("JWT")
+                    .build(),
+            ),
+        );
+    }
+}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -60,15 +84,12 @@ use crate::{
             ApiResponse<orders::OrderWithItems>,
             ApiResponse<orders::OrderList>,
             ApiResponse<admin::ProductList>
-        ),
-        security_schemes(
-            ("bearer_auth" = {
-                type = "http",
-                scheme = "bearer",
-                bearer_format = "JWT"
-            })
         )
     ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    modifiers(&SecurityAddon),
     tags(
         (name = "Health", description = "Health check endpoint"),
         (name = "Products", description = "Product endpoints"),
@@ -85,25 +106,3 @@ pub fn scalar_docs() -> Scalar<OpenApiSpec> {
     Scalar::with_url("/docs", ApiDoc::openapi())
     //.custom_html(SCALAR_HTML)
 }
-
-const SCALAR_HTML: &str = r#"<!doctype html>
-<html>
-<head>
-    <title>API Reference</title>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-</head>
-<body>
-
-<script id="api-reference" type="application/json">
-{
-  "themeId": "elysiajs",
-  "colorMode": "dark",
-  "layout": "modern",
-  "spec": $spec
-}
-</script>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
-</body>
-</html>
-"#;

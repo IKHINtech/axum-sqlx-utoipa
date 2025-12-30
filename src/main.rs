@@ -1,10 +1,9 @@
 use axum::{
-    Json, Router,
-    http::{Request, StatusCode},
+    Router,
+    http::{HeaderName, Request},
     routing::get,
 };
-use tower_governor::errors::GovernorError;
-use tower_governor::{GovernorConfigBuilder, GovernorLayer};
+use tower::limit::ConcurrencyLimitLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
@@ -15,7 +14,6 @@ use std::net::SocketAddr;
 use crate::{
     config::AppConfig,
     db::create_pool,
-    response::{ApiResponse, Meta},
     routes::{create_api_router, doc::scalar_docs},
 };
 
@@ -45,12 +43,9 @@ async fn main() -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(&pool).await?;
 
     let api_router = create_api_router();
-    let governor_config = GovernorConfigBuilder::default()
-        .per_second(10)
-        .burst_size(30)
-        .finish()
-        .expect("failed to build rate limit config");
-    let rate_limit_layer = GovernorLayer::new(governor_config);
+    let concurrency_limit_layer = ConcurrencyLimitLayer::new(100);
+
+    let request_id_header = HeaderName::from_static("x-request-id");
     let trace_layer = TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
         let request_id = request
             .headers()
@@ -70,20 +65,15 @@ async fn main() -> anyhow::Result<()> {
         .nest("/api", api_router)
         .merge(scalar_docs())
         .layer(trace_layer)
-        .layer(PropagateRequestIdLayer::new())
-        .layer(RequestBodyLimitLayer::new(1024 * 1024))
-        .layer(rate_limit_layer)
-        .layer(axum::error_handling::HandleErrorLayer::new(
-            |err: GovernorError| async move {
-                let body = ApiResponse::success(
-                    "Too Many Requests",
-                    serde_json::json!({ "error": err.to_string() }),
-                    Some(Meta::empty()),
-                );
-                (StatusCode::TOO_MANY_REQUESTS, Json(body))
-            },
+        .layer(PropagateRequestIdLayer::new(
+            request_id_header.clone(),
         ))
-        .layer(SetRequestIdLayer::new(MakeRequestUuid))
+        .layer(SetRequestIdLayer::new(
+            request_id_header,
+            MakeRequestUuid,
+        ))
+        .layer(RequestBodyLimitLayer::new(1024 * 1024))
+        .layer(concurrency_limit_layer)
         .with_state(pool);
 
     let addr = SocketAddr::from((config.host.parse::<std::net::IpAddr>()?, config.port));

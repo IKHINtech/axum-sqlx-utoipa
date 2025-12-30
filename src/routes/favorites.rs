@@ -1,7 +1,7 @@
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
-    routing::{delete, get, post},
+    routing::{delete, get},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
