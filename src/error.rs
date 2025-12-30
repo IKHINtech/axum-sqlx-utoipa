@@ -21,6 +21,9 @@ pub enum AppError {
     #[error("Database error")]
     DbError(#[from] sqlx::Error),
 
+    #[error("ORM error")]
+    OrmError(#[from] sea_orm::DbErr),
+
     #[error("Internal Server Error")]
     Internal(#[from] anyhow::Error),
 }
@@ -37,6 +40,7 @@ impl IntoResponse for AppError {
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
             AppError::DbError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            AppError::OrmError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             AppError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
 
