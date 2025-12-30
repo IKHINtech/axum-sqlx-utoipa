@@ -13,9 +13,10 @@ use std::{net::SocketAddr, time::Duration};
 
 use axum_ecommerce_api::{
     config::AppConfig,
-    db::create_pool,
+    db::{create_orm_conn, create_pool},
     response::{ApiResponse, Meta},
     routes::{create_api_router, doc::scalar_docs, health},
+    state::AppState,
 };
 
 #[tokio::main]
@@ -31,6 +32,7 @@ async fn main() -> anyhow::Result<()> {
 
     let config = AppConfig::from_env()?;
     let pool = create_pool(&config.database_url).await?;
+    let orm = create_orm_conn(&config.database_url).await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
@@ -73,6 +75,8 @@ async fn main() -> anyhow::Result<()> {
             );
         });
 
+    let app_state = AppState { pool, orm };
+
     let app = Router::new()
         .route("/health", get(health::health_check))
         .nest("/api", api_router)
@@ -88,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
         ))
         .layer(RequestBodyLimitLayer::new(1024 * 1024))
         .layer(concurrency_limit_layer)
-        .with_state(pool);
+        .with_state(app_state);
 
     let addr = SocketAddr::from((config.host.parse::<std::net::IpAddr>()?, config.port));
     tracing::info!("listening on {}", addr);

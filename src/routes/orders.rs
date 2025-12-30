@@ -6,16 +6,16 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    db::DbPool,
     error::AppResult,
     middleware::auth::AuthUser,
     response::ApiResponse,
     routes::params::OrderListQuery,
     dto::orders::{CheckoutRequest, OrderList, OrderWithItems, PayOrderRequest},
     services::order_service,
+    state::AppState,
 };
 
-pub fn route() -> Router<DbPool> {
+pub fn route() -> Router<AppState> {
     Router::new()
         .route("/", get(list_order))
         .route("/checkout", post(checkout))
@@ -39,11 +39,11 @@ pub fn route() -> Router<DbPool> {
     tag = "Orders"
 )]
 pub async fn list_order(
-    State(db): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Query(query): Query<OrderListQuery>,
 ) -> AppResult<Json<ApiResponse<OrderList>>> {
-    let resp = order_service::list_orders(&db, &user, query).await?;
+    let resp = order_service::list_orders(&state.pool, &user, query).await?;
     Ok(Json(resp))
 }
 
@@ -59,11 +59,11 @@ pub async fn list_order(
     tag = "Orders"
 )]
 pub async fn checkout(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Json(payload): Json<CheckoutRequest>,
 ) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
-    let resp = order_service::checkout(&pool, &user, payload).await?;
+    let resp = order_service::checkout(&state.pool, &user, payload).await?;
     Ok(Json(resp))
 }
 
@@ -83,12 +83,12 @@ pub async fn checkout(
     tag = "Orders"
 )]
 pub async fn pay_order(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
     Json(payload): Json<PayOrderRequest>,
 ) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
-    let resp = order_service::pay_order(&pool, &user, id, payload).await?;
+    let resp = order_service::pay_order(&state.pool, &user, id, payload).await?;
     Ok(Json(resp))
 }
 
@@ -106,10 +106,10 @@ pub async fn pay_order(
     tag = "Orders"
 )]
 pub async fn get_order(
-    State(db): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
-    let resp = order_service::get_order(&db, &user, id).await?;
+    let resp = order_service::get_order(&state.pool, &user, id).await?;
     Ok(Json(resp))
 }

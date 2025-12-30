@@ -1,6 +1,6 @@
 use axum::Router;
 
-use crate::db::DbPool;
+use crate::state::AppState;
 
 pub mod admin;
 pub mod auth;
@@ -13,7 +13,7 @@ pub mod params;
 pub mod products;
 
 // Build the API router without binding state; it will be provided at the top level.
-pub fn create_api_router() -> Router<DbPool> {
+pub fn create_api_router() -> Router<AppState> {
     Router::new()
         .nest("/products", products::router())
         .nest("/auth", auth::router())

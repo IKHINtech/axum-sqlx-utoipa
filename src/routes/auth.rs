@@ -1,15 +1,15 @@
 use axum::{Json, Router, extract::State, routing::post};
 
 use crate::{
-    db::DbPool,
     dto::auth::{LoginRequest, LoginResponse, RegisterRequest},
     error::AppResult,
     models::User,
     response::ApiResponse,
     services::auth_service::{login_user, register_user},
+    state::AppState,
 };
 
-pub fn router() -> Router<DbPool> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
@@ -25,10 +25,10 @@ pub fn router() -> Router<DbPool> {
     tag = "Auth"
 )]
 pub async fn register(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> AppResult<Json<ApiResponse<User>>> {
-    let resp = register_user(&pool, payload).await?;
+    let resp = register_user(&state.pool, payload).await?;
     Ok(Json(resp))
 }
 
@@ -43,9 +43,9 @@ pub async fn register(
     tag = "Auth"
 )]
 pub async fn login(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> AppResult<Json<ApiResponse<LoginResponse>>> {
-    let resp = login_user(&pool, payload).await?;
+    let resp = login_user(&state.pool, payload).await?;
     Ok(Json(resp))
 }

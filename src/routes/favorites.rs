@@ -6,7 +6,6 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    db::DbPool,
     error::AppResult,
     middleware::auth::AuthUser,
     models::Favorite,
@@ -14,9 +13,10 @@ use crate::{
     routes::params::Pagination,
     dto::favorites::{AddFavoriteRequest, FavoriteProductList},
     services::favorite_service,
+    state::AppState,
 };
 
-pub fn router() -> Router<DbPool> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_favorites).post(add_favorite))
         .route("/{product_id}", delete(remove_favorite))
@@ -36,11 +36,11 @@ pub fn router() -> Router<DbPool> {
     tag = "Favorites"
 )]
 pub async fn remove_favorite(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Path(product_id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
-    let resp = favorite_service::remove_favorite(&pool, &user, product_id).await?;
+    let resp = favorite_service::remove_favorite(&state.pool, &user, product_id).await?;
     Ok(Json(resp))
 }
 
@@ -58,11 +58,11 @@ pub async fn remove_favorite(
     tag = "Favorites"
 )]
 pub async fn list_favorites(
-    State(db): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Query(pagination): Query<Pagination>,
 ) -> AppResult<Json<ApiResponse<FavoriteProductList>>> {
-    let resp = favorite_service::list_favorites(&db, &user, pagination).await?;
+    let resp = favorite_service::list_favorites(&state.pool, &user, pagination).await?;
     Ok(Json(resp))
 }
 
@@ -79,10 +79,10 @@ pub async fn list_favorites(
     tag = "Favorites"
 )]
 pub async fn add_favorite(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Json(payload): Json<AddFavoriteRequest>,
 ) -> AppResult<Json<ApiResponse<Favorite>>> {
-    let resp = favorite_service::add_favorite(&pool, &user, payload).await?;
+    let resp = favorite_service::add_favorite(&state.pool, &user, payload).await?;
     Ok(Json(resp))
 }

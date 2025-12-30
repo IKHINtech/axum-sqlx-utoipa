@@ -5,7 +5,6 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    db::DbPool,
     dto::products::{CreateProductRequest, ProductList, UpdateProductRequest},
     error::AppResult,
     middleware::auth::AuthUser,
@@ -13,9 +12,10 @@ use crate::{
     response::ApiResponse,
     routes::params::ProductQuery,
     services::product_service,
+    state::AppState,
 };
 
-pub fn router() -> Router<DbPool> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create_product))
         .route("/", get(list_products))
@@ -42,10 +42,10 @@ pub fn router() -> Router<DbPool> {
     tag = "Products"
 )]
 pub async fn list_products(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     Query(query): Query<ProductQuery>,
 ) -> AppResult<Json<ApiResponse<ProductList>>> {
-    let resp = product_service::list_products(&pool, query).await?;
+    let resp = product_service::list_products(&state.pool, query).await?;
     Ok(Json(resp))
 }
 #[utoipa::path(
@@ -63,9 +63,9 @@ pub async fn list_products(
 
 pub async fn get_product(
     Path(id): Path<Uuid>,
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
 ) -> AppResult<Json<ApiResponse<Product>>> {
-    let resp = product_service::get_product(&pool, id).await?;
+    let resp = product_service::get_product(&state.pool, id).await?;
     Ok(Json(resp))
 }
 #[utoipa::path(
@@ -80,11 +80,11 @@ pub async fn get_product(
 )]
 
 pub async fn create_product(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Json(payload): Json<CreateProductRequest>,
 ) -> AppResult<Json<ApiResponse<Product>>> {
-    let resp = product_service::create_product(&pool, &user, payload).await?;
+    let resp = product_service::create_product(&state.pool, &user, payload).await?;
     Ok(Json(resp))
 }
 #[utoipa::path(
@@ -102,12 +102,12 @@ pub async fn create_product(
 )]
 
 pub async fn update_product(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateProductRequest>,
 ) -> AppResult<Json<ApiResponse<Product>>> {
-    let resp = product_service::update_product(&pool, &user, id, payload).await?;
+    let resp = product_service::update_product(&state.pool, &user, id, payload).await?;
     Ok(Json(resp))
 }
 #[utoipa::path(
@@ -124,10 +124,10 @@ pub async fn update_product(
 )]
 
 pub async fn delete_product(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
-    let resp = product_service::delete_product(&pool, &user, id).await?;
+    let resp = product_service::delete_product(&state.pool, &user, id).await?;
     Ok(Json(resp))
 }

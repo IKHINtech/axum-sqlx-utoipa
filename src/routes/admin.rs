@@ -8,7 +8,6 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    db::DbPool,
     error::AppResult,
     middleware::auth::AuthUser,
     models::{Order, Product},
@@ -16,9 +15,10 @@ use crate::{
     routes::params::{OrderListQuery, Pagination },
     dto::orders::{OrderList, OrderWithItems},
     services::admin_service,
+    state::AppState,
 };
 
-pub fn router() -> Router<DbPool> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/orders", get(list_all_orders))
         .route("/orders/{id}", get(get_order_admin))
@@ -67,11 +67,11 @@ pub struct ProductList {
     tag = "Admin"
 )]
 pub async fn list_all_orders(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Query(query): Query<OrderListQuery>,
 ) -> AppResult<Json<ApiResponse<OrderList>>> {
-    let resp = admin_service::list_all_orders(&pool, &user, query).await?;
+    let resp = admin_service::list_all_orders(&state.pool, &user, query).await?;
     Ok(Json(resp))
 }
 
@@ -92,11 +92,11 @@ pub async fn list_all_orders(
 
 )]
 pub async fn get_order_admin(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
-    let resp = admin_service::get_order_admin(&pool, &user, id).await?;
+    let resp = admin_service::get_order_admin(&state.pool, &user, id).await?;
     Ok(Json(resp))
 }
 
@@ -118,12 +118,12 @@ pub async fn get_order_admin(
     tag = "Admin"
 )]
 pub async fn update_order_status(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateOrderStatusRequest>,
 ) -> AppResult<Json<ApiResponse<Order>>> {
-    let resp = admin_service::update_order_status(&pool, &user, id, payload).await?;
+    let resp = admin_service::update_order_status(&state.pool, &user, id, payload).await?;
     Ok(Json(resp))
 }
 
@@ -143,11 +143,11 @@ pub async fn update_order_status(
     tag = "Admin"
 )]
 pub async fn list_low_stock(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Query(query): Query<LowStockQuery>,
 ) -> AppResult<Json<ApiResponse<ProductList>>> {
-    let resp = admin_service::list_low_stock(&pool, &user, query).await?;
+    let resp = admin_service::list_low_stock(&state.pool, &user, query).await?;
     Ok(Json(resp))
 }
 
@@ -169,11 +169,11 @@ pub async fn list_low_stock(
     tag = "Admin"
 )]
 pub async fn adjust_inventory(
-    State(pool): State<DbPool>,
+    State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
     Json(payload): Json<InventoryAdjustRequest>,
 ) -> AppResult<Json<ApiResponse<Product>>> {
-    let resp = admin_service::adjust_inventory(&pool, &user, id, payload).await?;
+    let resp = admin_service::adjust_inventory(&state.pool, &user, id, payload).await?;
     Ok(Json(resp))
 }
