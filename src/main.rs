@@ -11,21 +11,12 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use std::{net::SocketAddr, time::Duration};
 
-use crate::{
+use axum_ecommerce_api::{
     config::AppConfig,
     db::create_pool,
     response::{ApiResponse, Meta},
-    routes::{create_api_router, doc::scalar_docs},
+    routes::{create_api_router, doc::scalar_docs, health},
 };
-
-mod audit;
-mod config;
-mod db;
-mod error;
-mod middleware;
-mod models;
-mod response;
-mod routes;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -83,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
         });
 
     let app = Router::new()
-        .route("/health", get(routes::health::health_check))
+        .route("/health", get(health::health_check))
         .nest("/api", api_router)
         .merge(scalar_docs())
         .fallback(not_found)

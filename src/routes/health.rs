@@ -6,7 +6,7 @@ use crate::response::{ApiResponse, Meta};
 
 #[derive(Serialize, ToSchema)]
 pub struct HealthData {
-    status: String,
+    pub status: String,
 }
 
 #[utoipa::path(

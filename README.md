@@ -29,6 +29,8 @@ Axum-based REST API for a lightweight e-commerce backend: products, carts, order
 - Lint: `cargo clippy --all-features --all-targets -- -D warnings`
 - Test: `cargo test --all-features`
 - Format: `cargo fmt`
+- Make targets: see `Makefile` (`make setup`, `make dev`, `make lint`, `make test`, `make migrate`, `make docker-build`, `make compose-up/down`).
+- Seed sample data: `make seed` (creates admin/user accounts + demo products; runs migrations first).
 
 ## Endpoints (high level)
 - `GET /health` – health check
@@ -58,6 +60,9 @@ All protected routes expect `Authorization: Bearer <token>`; admin-only routes e
 - `src/response.rs` – `ApiResponse` + pagination meta
 - `migrations/` – SQLx migrations
 - `bacon.toml` – dev tasks/watch config
+- `Makefile` – common dev shortcuts
+- `Dockerfile`, `docker-compose.yml` – containerized app + Postgres
+- `.env.example` – starter environment variables
 
 ## Running migrations manually (optional)
 ```sh
@@ -65,6 +70,22 @@ cargo sqlx migrate run
 ```
 (Runtime also applies migrations automatically on startup.)
 
+## Tests
+- `cargo test` or `make test` (includes a health check test; expand as needed for routes/integration).
+
 ## Notes
 - Product listing responses are raw arrays (transparent wrapper) under `ApiResponse.data`.
 - Tracing level can be tuned via `RUST_LOG` (defaults to `info,axum_ecommerce_api=debug`).***
+
+## Docker & Compose
+- Build image: `make docker-build`
+- Run with Postgres: `make compose-up` (exposes app on `localhost:3000`, Postgres on `localhost:5432`)
+- Stop: `make compose-down`
+- Logs: `make compose-logs`
+
+## Using as a template
+1) Copy/clone repo.
+2) Run `make setup` to create `.env` from `.env.example`.
+3) Adjust names (crate/package) if desired, and set `JWT_SECRET`.
+4) Start Postgres via `docker compose up` (or your own DB) and run `cargo run` or `make dev`.
+5) Update `README`/migrations/models/routes` as you build your own domain.

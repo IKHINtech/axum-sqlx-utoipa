@@ -4,7 +4,6 @@
 !.env.example
 /target/
 **/*.rs.bk
-Cargo.lock
 *.log
 # SQLx
 /sqlx-data.json
