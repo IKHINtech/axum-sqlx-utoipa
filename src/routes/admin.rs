@@ -71,7 +71,7 @@ pub async fn list_all_orders(
     user: AuthUser,
     Query(query): Query<OrderListQuery>,
 ) -> AppResult<Json<ApiResponse<OrderList>>> {
-    let resp = admin_service::list_all_orders(&state.pool, &user, query).await?;
+    let resp = admin_service::list_all_orders(&state, &user, query).await?;
     Ok(Json(resp))
 }
 
@@ -96,7 +96,7 @@ pub async fn get_order_admin(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
-    let resp = admin_service::get_order_admin(&state.pool, &user, id).await?;
+    let resp = admin_service::get_order_admin(&state, &user, id).await?;
     Ok(Json(resp))
 }
 
@@ -123,7 +123,7 @@ pub async fn update_order_status(
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateOrderStatusRequest>,
 ) -> AppResult<Json<ApiResponse<Order>>> {
-    let resp = admin_service::update_order_status(&state.pool, &user, id, payload).await?;
+    let resp = admin_service::update_order_status(&state, &user, id, payload).await?;
     Ok(Json(resp))
 }
 
@@ -147,7 +147,7 @@ pub async fn list_low_stock(
     user: AuthUser,
     Query(query): Query<LowStockQuery>,
 ) -> AppResult<Json<ApiResponse<ProductList>>> {
-    let resp = admin_service::list_low_stock(&state.pool, &user, query).await?;
+    let resp = admin_service::list_low_stock(&state, &user, query).await?;
     Ok(Json(resp))
 }
 
@@ -174,6 +174,6 @@ pub async fn adjust_inventory(
     Path(id): Path<Uuid>,
     Json(payload): Json<InventoryAdjustRequest>,
 ) -> AppResult<Json<ApiResponse<Product>>> {
-    let resp = admin_service::adjust_inventory(&state.pool, &user, id, payload).await?;
+    let resp = admin_service::adjust_inventory(&state, &user, id, payload).await?;
     Ok(Json(resp))
 }

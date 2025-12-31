@@ -28,7 +28,7 @@ pub async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> AppResult<Json<ApiResponse<User>>> {
-    let resp = register_user(&state.pool, payload).await?;
+    let resp = register_user(&state, payload).await?;
     Ok(Json(resp))
 }
 
@@ -46,6 +46,6 @@ pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> AppResult<Json<ApiResponse<LoginResponse>>> {
-    let resp = login_user(&state.pool, payload).await?;
+    let resp = login_user(&state, payload).await?;
     Ok(Json(resp))
 }

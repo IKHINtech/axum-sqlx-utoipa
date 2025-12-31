@@ -134,7 +134,7 @@ pub async fn add_to_cart(
     };
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "cart_update",
         Some("cart_items"),
@@ -176,7 +176,7 @@ pub async fn remove_from_cart(
     }
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "cart_remove",
         Some("cart_items"),

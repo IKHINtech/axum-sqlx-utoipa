@@ -104,7 +104,7 @@ pub async fn create_product(
     let product = active.insert(&state.orm).await?;
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "product_create",
         Some("products"),
@@ -154,7 +154,7 @@ pub async fn update_product(
     let product = active.update(&state.orm).await?;
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "product_update",
         Some("products"),
@@ -185,7 +185,7 @@ pub async fn delete_product(
     }
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "product_delete",
         Some("products"),

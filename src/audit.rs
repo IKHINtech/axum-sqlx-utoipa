@@ -1,29 +1,27 @@
 use serde_json::Value;
 use uuid::Uuid;
+use sea_orm::{ActiveModelTrait, Set};
+use sea_orm::ActiveValue::NotSet;
 
-use crate::{db::DbPool, error::AppResult};
+use crate::{error::AppResult, state::AppState, entity::audit_logs};
 
 pub async fn log_audit(
-    pool: &DbPool,
+    state: &AppState,
     user_id: Option<Uuid>,
     action: &str,
     resource: Option<&str>,
     metadata: Option<Value>,
 ) -> AppResult<()> {
-    let id = Uuid::new_v4();
-    sqlx::query(
-        r#"
-        INSERT INTO audit_logs (id, user_id, action, resource, metadata)
-        VALUES ($1, $2, $3, $4, $5)
-        "#,
-    )
-    .bind(id)
-    .bind(user_id)
-    .bind(action)
-    .bind(resource)
-    .bind(metadata)
-    .execute(pool)
-    .await?;
+    let active = audit_logs::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id),
+        action: Set(action.to_string()),
+        resource: Set(resource.map(|r| r.to_string())),
+        metadata: Set(metadata),
+        created_at: NotSet,
+    };
+
+    active.insert(&state.orm).await?;
 
     Ok(())
 }

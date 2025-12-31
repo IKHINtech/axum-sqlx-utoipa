@@ -13,7 +13,7 @@ use std::{net::SocketAddr, time::Duration};
 
 use axum_ecommerce_api::{
     config::AppConfig,
-    db::{create_orm_conn, create_pool},
+    db::{create_orm_conn, run_migrations},
     response::{ApiResponse, Meta},
     routes::{create_api_router, doc::scalar_docs, health},
     state::AppState,
@@ -31,10 +31,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = AppConfig::from_env()?;
-    let pool = create_pool(&config.database_url).await?;
     let orm = create_orm_conn(&config.database_url).await?;
 
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    run_migrations(&orm).await?;
 
     let api_router = create_api_router();
     let concurrency_limit_layer = ConcurrencyLimitLayer::new(100);
@@ -75,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
             );
         });
 
-    let app_state = AppState { pool, orm };
+    let app_state = AppState { orm };
 
     let app = Router::new()
         .route("/health", get(health::health_check))

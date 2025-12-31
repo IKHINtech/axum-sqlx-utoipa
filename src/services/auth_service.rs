@@ -6,24 +6,27 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use password_hash::rand_core::OsRng;
 use uuid::Uuid;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::ActiveValue::NotSet;
 
 use crate::{
     audit::log_audit,
-    db::DbPool,
     error::{AppError, AppResult},
     models::User,
     response::{ApiResponse, Meta},
+    state::AppState,
+    entity::users::{ActiveModel as UserActive, Column as UserCol, Entity as Users, Model as UserModel},
 };
 use crate::dto::auth::{Claims, LoginRequest, LoginResponse, RegisterRequest};
 
 pub async fn register_user(
-    pool: &DbPool,
+    state: &AppState,
     payload: RegisterRequest,
 ) -> AppResult<ApiResponse<User>> {
     let RegisterRequest { email, password } = payload;
-    let exist: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE email = $1")
-        .bind(email.as_str())
-        .fetch_optional(pool)
+    let exist = Users::find()
+        .filter(UserCol::Email.eq(email.clone()))
+        .one(&state.orm)
         .await?;
 
     if exist.is_some() {
@@ -37,19 +40,17 @@ pub async fn register_user(
         .map_err(|e| AppError::Internal(anyhow::anyhow!(e.to_string())))?
         .to_string();
 
-    let id = Uuid::new_v4();
-
-    let user: User = sqlx::query_as(
-        "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3) RETURNING *",
-    )
-    .bind(id)
-    .bind(email.as_str())
-    .bind(password_hash)
-    .fetch_one(pool)
-    .await?;
+    let active = UserActive {
+        id: Set(Uuid::new_v4()),
+        email: Set(email),
+        password_hash: Set(password_hash),
+        role: Set("user".into()),
+        created_at: NotSet,
+    };
+    let user = active.insert(&state.orm).await?;
 
     if let Err(err) = log_audit(
-        pool,
+        state,
         Some(user.id),
         "user_register",
         Some("users"),
@@ -59,18 +60,19 @@ pub async fn register_user(
     {
         tracing::warn!(error = %err, "audit log failed");
     }
-    Ok(ApiResponse::success("User created", user, None))
+    Ok(ApiResponse::success("User created", user_from_entity(user), None))
 }
 
 pub async fn login_user(
-    pool: &DbPool,
+    state: &AppState,
     payload: LoginRequest,
 ) -> AppResult<ApiResponse<LoginResponse>> {
     let LoginRequest { email, password } = payload;
-    let user: Option<User> = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
-        .bind(email.as_str())
-        .fetch_optional(pool)
-        .await?;
+    let user = Users::find()
+        .filter(UserCol::Email.eq(email.clone()))
+        .one(&state.orm)
+        .await?
+        .map(user_from_entity);
 
     let user = match user {
         Some(u) => u,
@@ -113,7 +115,7 @@ pub async fn login_user(
     };
 
     if let Err(err) = log_audit(
-        pool,
+        state,
         Some(user.id),
         "user_login",
         Some("users"),
@@ -129,4 +131,14 @@ pub async fn login_user(
         resp,
         Some(Meta::empty()),
     ))
+}
+
+fn user_from_entity(model: UserModel) -> User {
+    User {
+        id: model.id,
+        email: model.email,
+        password_hash: model.password_hash,
+        created_at: model.created_at.with_timezone(&Utc),
+        role: model.role,
+    }
 }

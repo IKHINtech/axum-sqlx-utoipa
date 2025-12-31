@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct User {
     pub id: Uuid,
     pub email: String,
@@ -12,7 +12,7 @@ pub struct User {
     pub role: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Product {
     pub id: Uuid,
     pub name: String,
@@ -22,7 +22,7 @@ pub struct Product {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Favorite {
     pub id: Uuid,
     pub product_id: Uuid,
@@ -30,7 +30,7 @@ pub struct Favorite {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CartItem {
     pub id: Uuid,
     pub product_id: Uuid,
@@ -39,7 +39,7 @@ pub struct CartItem {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Order {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -52,7 +52,7 @@ pub struct Order {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct OrderItem {
     pub id: Uuid,
     pub order_id: Uuid,

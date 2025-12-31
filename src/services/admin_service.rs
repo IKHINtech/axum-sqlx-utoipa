@@ -1,9 +1,19 @@
-use sqlx::QueryBuilder;
 use uuid::Uuid;
+use chrono::Utc;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, TransactionTrait,
+};
+use sea_orm::sea_query::LockType;
+use sea_orm::ActiveValue::Set;
 
 use crate::{
     audit::log_audit,
-    db::DbPool,
+    entity::{
+        order_items::{Column as OrderItemCol, Entity as OrderItems, Model as OrderItemModel},
+        orders::{ActiveModel as OrderActive, Column as OrderCol, Entity as Orders, Model as OrderModel},
+        products::{ActiveModel as ProductActive, Column as ProdCol, Entity as Products, Model as ProductModel},
+    },
     dto::orders::OrderWithItems,
     error::{AppError, AppResult},
     middleware::auth::{AuthUser, ensure_admin},
@@ -12,38 +22,42 @@ use crate::{
     routes::params::{OrderListQuery, SortOrder},
     routes::admin::{InventoryAdjustRequest, LowStockQuery, ProductList, UpdateOrderStatusRequest},
     dto::orders::OrderList,
+    state::AppState,
 };
 
 pub async fn list_all_orders(
-    pool: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     query: OrderListQuery,
 ) -> AppResult<ApiResponse<OrderList>> {
     ensure_admin(user)?;
     let (page, limit, offset) = query.pagination.normalize();
-    let mut list_builder = QueryBuilder::new("SELECT * FROM orders");
-    let mut count_builder = QueryBuilder::new("SELECT COUNT(*) FROM orders");
 
+    let mut condition = Condition::all();
     if let Some(status) = query.status.as_ref().filter(|s| !s.is_empty()) {
-        list_builder.push(" WHERE status = ").push_bind(status);
-        count_builder.push(" WHERE status = ").push_bind(status);
+        condition = condition.add(OrderCol::Status.eq(status.clone()));
     }
 
-    let sort_order = query.sort_order.unwrap_or(SortOrder::Desc);
-    list_builder
-        .push(" ORDER BY created_at ")
-        .push(sort_order.as_sql())
-        .push(" LIMIT ")
-        .push_bind(limit)
-        .push(" OFFSET ")
-        .push_bind(offset);
+    let mut finder = Orders::find().filter(condition);
 
-    let orders = list_builder
-        .build_query_as::<Order>()
-        .fetch_all(pool)
-        .await?;
-    let total: (i64,) = count_builder.build_query_as().fetch_one(pool).await?;
-    let meta = Meta::new(page, limit, total.0);
+    let sort_order = query.sort_order.unwrap_or(SortOrder::Desc);
+    finder = match sort_order {
+        SortOrder::Asc => finder.order_by_asc(OrderCol::CreatedAt),
+        SortOrder::Desc => finder.order_by_desc(OrderCol::CreatedAt),
+    };
+
+    let total = finder.clone().count(&state.orm).await? as i64;
+
+    let orders = finder
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .all(&state.orm)
+        .await?
+        .into_iter()
+        .map(order_from_entity)
+        .collect();
+
+    let meta = Meta::new(page, limit, total);
 
     let order_list = OrderList { items: orders };
 
@@ -51,24 +65,27 @@ pub async fn list_all_orders(
 }
 
 pub async fn get_order_admin(
-    pool: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     id: Uuid,
 ) -> AppResult<ApiResponse<OrderWithItems>> {
     ensure_admin(user)?;
-    let order = sqlx::query_as::<_, Order>("SELECT * FROM orders WHERE id = $1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
+    let order = Orders::find_by_id(id)
+        .one(&state.orm)
+        .await?
+        .map(order_from_entity);
     let order = match order {
         Some(o) => o,
         None => return Err(AppError::NotFound),
     };
 
-    let items = sqlx::query_as::<_, OrderItem>("SELECT * FROM order_items WHERE order_id = $1")
-        .bind(order.id)
-        .fetch_all(pool)
-        .await?;
+    let items = OrderItems::find()
+        .filter(OrderItemCol::OrderId.eq(order.id))
+        .all(&state.orm)
+        .await?
+        .into_iter()
+        .map(order_item_from_entity)
+        .collect();
 
     let data = OrderWithItems { order, items };
     Ok(ApiResponse::success(
@@ -79,7 +96,7 @@ pub async fn get_order_admin(
 }
 
 pub async fn update_order_status(
-    pool: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     id: Uuid,
     payload: UpdateOrderStatusRequest,
@@ -87,27 +104,19 @@ pub async fn update_order_status(
     ensure_admin(user)?;
     validate_order_status(&payload.status)?;
 
-    let order = sqlx::query_as::<_, Order>(
-        r#"
-        UPDATE orders
-        SET status = $2,
-            updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-        "#,
-    )
-    .bind(id)
-    .bind(payload.status)
-    .fetch_optional(pool)
-    .await?;
-
-    let order = match order {
+    let existing = Orders::find_by_id(id).one(&state.orm).await?;
+    let existing = match existing {
         Some(o) => o,
         None => return Err(AppError::NotFound),
     };
 
+    let mut active: OrderActive = existing.into();
+    active.status = Set(payload.status);
+    active.updated_at = Set(Utc::now().into());
+    let order = active.update(&state.orm).await?;
+
     if let Err(err) = log_audit(
-        pool,
+        state,
         Some(user.user_id),
         "order_status_update",
         Some("orders"),
@@ -120,13 +129,13 @@ pub async fn update_order_status(
 
     Ok(ApiResponse::success(
         "Order updated",
-        order,
+        order_from_entity(order),
         Some(Meta::empty()),
     ))
 }
 
 pub async fn list_low_stock(
-    pool: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     query: LowStockQuery,
 ) -> AppResult<ApiResponse<ProductList>> {
@@ -134,27 +143,29 @@ pub async fn list_low_stock(
     let threshold = query.threshold.unwrap_or(5);
     let (page, limit, offset) = query.pagination.normalize();
 
-    let items = sqlx::query_as::<_, Product>(
-        "SELECT * FROM products WHERE stock <= $1 ORDER BY stock ASC, created_at DESC LIMIT $2 OFFSET $3",
-    )
-    .bind(threshold)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await?;
+    let mut finder = Products::find().filter(ProdCol::Stock.lte(threshold));
+    finder = finder
+        .order_by_asc(ProdCol::Stock)
+        .order_by_desc(ProdCol::CreatedAt);
 
-    let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM products WHERE stock <= $1")
-        .bind(threshold)
-        .fetch_one(pool)
-        .await?;
+    let total = finder.clone().count(&state.orm).await? as i64;
+
+    let items = finder
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .all(&state.orm)
+        .await?
+        .into_iter()
+        .map(product_from_entity)
+        .collect();
 
     let data = ProductList { items };
-    let meta = Meta::new(page, limit, total.0);
+    let meta = Meta::new(page, limit, total);
     Ok(ApiResponse::success("Low stock", data, Some(meta)))
 }
 
 pub async fn adjust_inventory(
-    pool: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     id: Uuid,
     payload: InventoryAdjustRequest,
@@ -164,10 +175,10 @@ pub async fn adjust_inventory(
         return Err(AppError::BadRequest("delta must not be 0".into()));
     }
 
-    let mut tx = pool.begin().await?;
-    let product = sqlx::query_as::<_, Product>("SELECT * FROM products WHERE id = $1 FOR UPDATE")
-        .bind(id)
-        .fetch_optional(&mut *tx)
+    let txn = state.orm.begin().await?;
+    let product = Products::find_by_id(id)
+        .lock(LockType::Update)
+        .one(&txn)
         .await?;
     let product = match product {
         Some(p) => p,
@@ -179,17 +190,14 @@ pub async fn adjust_inventory(
         return Err(AppError::BadRequest("stock cannot be negative".into()));
     }
 
-    let updated =
-        sqlx::query_as::<_, Product>("UPDATE products SET stock = $2 WHERE id = $1 RETURNING *")
-            .bind(id)
-            .bind(new_stock)
-            .fetch_one(&mut *tx)
-            .await?;
+    let mut active: ProductActive = product.into();
+    active.stock = Set(new_stock);
+    let updated = active.update(&txn).await?;
 
-    tx.commit().await?;
+    txn.commit().await?;
 
     if let Err(err) = log_audit(
-        pool,
+        state,
         Some(user.user_id),
         "inventory_adjust",
         Some("products"),
@@ -202,7 +210,7 @@ pub async fn adjust_inventory(
 
     Ok(ApiResponse::success(
         "Inventory updated",
-        updated,
+        product_from_entity(updated),
         Some(Meta::empty()),
     ))
 }
@@ -213,5 +221,41 @@ fn validate_order_status(status: &str) -> Result<(), AppError> {
         Ok(())
     } else {
         Err(AppError::BadRequest("Invalid order status".into()))
+    }
+}
+
+fn order_from_entity(model: OrderModel) -> Order {
+    Order {
+        id: model.id,
+        user_id: model.user_id,
+        total_amount: model.total_amount,
+        status: model.status,
+        payment_status: model.payment_status,
+        invoice_number: model.invoice_number,
+        paid_at: model.paid_at.map(|dt| dt.with_timezone(&Utc)),
+        created_at: model.created_at.with_timezone(&Utc),
+        updated_at: model.updated_at.with_timezone(&Utc),
+    }
+}
+
+fn order_item_from_entity(model: OrderItemModel) -> OrderItem {
+    OrderItem {
+        id: model.id,
+        order_id: model.order_id,
+        product_id: model.product_id,
+        quantity: model.quantity,
+        price: model.price,
+        created_at: model.created_at.with_timezone(&Utc),
+    }
+}
+
+fn product_from_entity(model: ProductModel) -> Product {
+    Product {
+        id: model.id,
+        name: model.name,
+        description: model.description,
+        price: model.price,
+        stock: model.stock,
+        created_at: model.created_at.with_timezone(&Utc),
     }
 }

@@ -1,18 +1,31 @@
-use sqlx::{PgPool, postgres::PgPoolOptions};
-use sea_orm::{Database, DatabaseConnection};
+use anyhow::Result;
+use sea_orm::{Database, DatabaseConnection, Statement, ConnectionTrait};
+use std::path::PathBuf;
+use tokio::fs;
 
-pub type DbPool = PgPool;
-pub async fn create_pool(database_url: &str) -> anyhow::Result<DbPool> {
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(database_url)
-        .await?;
-    Ok(pool)
-}
-
-pub type OrmConn = DatabaseConnection;
-
-pub async fn create_orm_conn(database_url: &str) -> anyhow::Result<OrmConn> {
+/// Create a SeaORM connection.
+pub async fn create_orm_conn(database_url: &str) -> Result<DatabaseConnection> {
     let conn = Database::connect(database_url).await?;
     Ok(conn)
+}
+
+/// Minimal migration runner that executes SQL files in `migrations/` in filename order.
+pub async fn run_migrations(conn: &DatabaseConnection) -> Result<()> {
+    let mut entries = fs::read_dir("migrations").await?;
+    let mut files: Vec<PathBuf> = Vec::new();
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if path.is_file() {
+            files.push(path);
+        }
+    }
+    files.sort();
+
+    let backend = conn.get_database_backend();
+    for file in files {
+        let sql = fs::read_to_string(&file).await?;
+        conn.execute(Statement::from_string(backend, sql)).await?;
+    }
+
+    Ok(())
 }

@@ -4,8 +4,14 @@ use argon2::{
 };
 use axum_ecommerce_api::{
     config::AppConfig,
-    db::create_pool,
+    db::{create_orm_conn, run_migrations},
+    entity::{
+        products::{ActiveModel as ProductActive, Column as ProdCol, Entity as Products},
+        users::{ActiveModel as UserActive, Column as UserCol, Entity as Users, Model as UserModel},
+    },
 };
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::ActiveValue::NotSet;
 use uuid::Uuid;
 
 #[tokio::main]
@@ -13,28 +19,28 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let config = AppConfig::from_env()?;
 
-    let pool = create_pool(&config.database_url).await?;
+    let orm = create_orm_conn(&config.database_url).await?;
     // Ensure migrations are applied.
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    run_migrations(&orm).await?;
 
-    let admin_id = ensure_admin(&pool, "admin@example.com", "admin123").await?;
-    let user_id = ensure_user(&pool, "user@example.com", "user123").await?;
-    seed_products(&pool).await?;
+    let admin_id = ensure_admin(&orm, "admin@example.com", "admin123").await?;
+    let user_id = ensure_user(&orm, "user@example.com", "user123").await?;
+    seed_products(&orm).await?;
 
     println!("Seed completed. Admin ID: {admin_id}, User ID: {user_id}");
     Ok(())
 }
 
-async fn ensure_admin(pool: &sqlx::PgPool, email: &str, password: &str) -> anyhow::Result<Uuid> {
-    ensure_user_with_role(pool, email, password, "admin").await
+async fn ensure_admin(orm: &sea_orm::DatabaseConnection, email: &str, password: &str) -> anyhow::Result<Uuid> {
+    ensure_user_with_role(orm, email, password, "admin").await
 }
 
-async fn ensure_user(pool: &sqlx::PgPool, email: &str, password: &str) -> anyhow::Result<Uuid> {
-    ensure_user_with_role(pool, email, password, "user").await
+async fn ensure_user(orm: &sea_orm::DatabaseConnection, email: &str, password: &str) -> anyhow::Result<Uuid> {
+    ensure_user_with_role(orm, email, password, "user").await
 }
 
 async fn ensure_user_with_role(
-    pool: &sqlx::PgPool,
+    orm: &sea_orm::DatabaseConnection,
     email: &str,
     password: &str,
     role: &str,
@@ -46,38 +52,34 @@ async fn ensure_user_with_role(
         .map_err(|e| anyhow::anyhow!(e.to_string()))?
         .to_string();
 
-    let row: Option<(Uuid,)> = sqlx::query_as(
-        r#"
-        INSERT INTO users (id, email, password_hash, role)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role
-        RETURNING id
-        "#,
-    )
-    .bind(Uuid::new_v4())
-    .bind(email)
-    .bind(password_hash)
-    .bind(role)
-    .fetch_optional(pool)
-    .await?;
-
-    // If user already exists, fetch id
-    let user_id = match row {
-        Some((id,)) => id,
-        None => {
-            let existing: (Uuid,) = sqlx::query_as("SELECT id FROM users WHERE email = $1")
-                .bind(email)
-                .fetch_one(pool)
-                .await?;
-            existing.0
+    if let Some(existing) = Users::find()
+        .filter(UserCol::Email.eq(email.to_string()))
+        .one(orm)
+        .await? {
+        if existing.role != role {
+            let mut active: UserActive = existing.clone().into();
+            active.role = Set(role.to_string());
+            active.update(orm).await?;
         }
+        println!("Ensured user {email} (role={role})");
+        return Ok(existing.id);
+    }
+
+    let active = UserActive {
+        id: Set(Uuid::new_v4()),
+        email: Set(email.to_string()),
+        password_hash: Set(password_hash),
+        role: Set(role.to_string()),
+        created_at: NotSet,
     };
 
+    let model: UserModel = active.insert(orm).await?;
+
     println!("Ensured user {email} (role={role})");
-    Ok(user_id)
+    Ok(model.id)
 }
 
-async fn seed_products(pool: &sqlx::PgPool) -> anyhow::Result<()> {
+async fn seed_products(orm: &sea_orm::DatabaseConnection) -> anyhow::Result<()> {
     let products = vec![
         ("Axum Hoodie", "Warm hoodie for Rustaceans", 550000, 50),
         ("Ferris Mug", "Coffee tastes better with Ferris", 120000, 100),
@@ -86,20 +88,19 @@ async fn seed_products(pool: &sqlx::PgPool) -> anyhow::Result<()> {
     ];
 
     for (name, desc, price, stock) in products {
-        sqlx::query(
-            r#"
-            INSERT INTO products (id, name, description, price, stock)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (name) DO NOTHING
-            "#,
-        )
-        .bind(Uuid::new_v4())
-        .bind(name)
-        .bind(desc)
-        .bind(price)
-        .bind(stock)
-        .execute(pool)
-        .await?;
+        let existing = Products::find().filter(ProdCol::Name.eq(name)).one(orm).await?;
+        if existing.is_some() {
+            continue;
+        }
+        let active = ProductActive {
+            id: Set(Uuid::new_v4()),
+            name: Set(name.to_string()),
+            description: Set(Some(desc.to_string())),
+            price: Set(price),
+            stock: Set(stock),
+            created_at: NotSet,
+        };
+        active.insert(orm).await?;
     }
 
     println!("Seeded products");

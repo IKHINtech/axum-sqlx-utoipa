@@ -28,8 +28,6 @@ pub async fn list_favorites(
     let (page, limit, offset) = pagination.normalize();
     #[derive(Debug, FromQueryResult)]
     struct FavWithProduct {
-        #[sea_orm(column_name = "favorites.id")]
-        fav_id: Uuid,
         #[sea_orm(column_name = "favorites.product_id")]
         product_id: Uuid,
         #[sea_orm(column_name = "products.name")]
@@ -46,7 +44,6 @@ pub async fn list_favorites(
 
     let rows = Favorites::find()
         .select()
-        .column_as(FavCol::Id, "favorites.id")
         .column_as(FavCol::ProductId, "favorites.product_id")
         .join(sea_orm::JoinType::InnerJoin, Favorites::belongs_to(Products).into())
         .column_as(ProdCol::Name, "products.name")
@@ -119,7 +116,7 @@ pub async fn add_favorite(
     };
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "favorite_add",
         Some("favorites"),
@@ -156,7 +153,7 @@ pub async fn remove_favorite(
     }
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "favorite_remove",
         Some("favorites"),

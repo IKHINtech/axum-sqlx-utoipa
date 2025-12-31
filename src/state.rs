@@ -1,7 +1,6 @@
-use crate::db::{DbPool, OrmConn};
+use sea_orm::DatabaseConnection;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub pool: DbPool,
-    pub orm: OrmConn,
+    pub orm: DatabaseConnection,
 }

@@ -163,7 +163,7 @@ pub async fn checkout(
     txn.commit().await?;
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "checkout",
         Some("orders"),
@@ -228,7 +228,7 @@ pub async fn pay_order(
     txn.commit().await?;
 
     if let Err(err) = log_audit(
-        &state.pool,
+        state,
         Some(user.user_id),
         "order_paid",
         Some("orders"),

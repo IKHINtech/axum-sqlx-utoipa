@@ -18,9 +18,6 @@ pub enum AppError {
     #[error("Forbidden")]
     Forbidden,
 
-    #[error("Database error")]
-    DbError(#[from] sqlx::Error),
-
     #[error("ORM error")]
     OrmError(#[from] sea_orm::DbErr),
 
@@ -39,7 +36,6 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
-            AppError::DbError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             AppError::OrmError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             AppError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };

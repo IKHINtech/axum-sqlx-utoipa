@@ -24,7 +24,7 @@ test:
 	cargo test --all-features
 
 migrate:
-	cargo sqlx migrate run
+	cargo run --bin migrate
 
 seed:
 	cargo run --bin seed
