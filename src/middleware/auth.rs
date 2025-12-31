@@ -33,14 +33,12 @@ where
         let auth_header = parts
             .headers
             .get(header::AUTHORIZATION)
-            .ok_or_else(|| AppError::BadRequest("Missing Authorization header".into()))?;
+            .ok_or(AppError::Unauthorized)?;
 
-        let auth_str = auth_header
-            .to_str()
-            .map_err(|_| AppError::BadRequest("Invalid Authorization header".into()))?;
+        let auth_str = auth_header.to_str().map_err(|_| AppError::Unauthorized)?;
 
         if !auth_str.starts_with("Bearer ") {
-            return Err(AppError::BadRequest("Invalid Authorization scheme".into()));
+            return Err(AppError::Unauthorized);
         }
         let token = auth_str.trim_start_matches("Bearer ").trim();
 
@@ -52,10 +50,9 @@ where
             &DecodingKey::from_secret(secret.as_bytes()),
             &Validation::default(),
         )
-        .map_err(|_| AppError::BadRequest("Invalid or expired token".into()))?;
+        .map_err(|_| AppError::Unauthorized)?;
 
-        let user_id = Uuid::parse_str(&decoded.claims.sub)
-            .map_err(|_| AppError::BadRequest("Invalid user id in token".into()))?;
+        let user_id = Uuid::parse_str(&decoded.claims.sub).map_err(|_| AppError::Unauthorized)?;
 
         Ok(AuthUser {
             user_id,
