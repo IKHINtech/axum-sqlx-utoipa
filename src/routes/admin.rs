@@ -8,12 +8,12 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    dto::orders::{OrderList, OrderWithItems},
     error::AppResult,
     middleware::auth::AuthUser,
     models::{Order, Product},
     response::ApiResponse,
-    routes::params::{OrderListQuery, Pagination },
-    dto::orders::{OrderList, OrderWithItems},
+    routes::params::{OrderListQuery, Pagination},
     services::admin_service,
     state::AppState,
 };
@@ -51,7 +51,7 @@ pub struct ProductList {
 
 #[utoipa::path(
     get,
-    path = "/admin/orders",
+    path = "/api/admin/orders",
     params(
         ("page" = Option<i64>, Query, description = "Page number, default 1"),
         ("per_page" = Option<i64>, Query, description = "Items per page, default 20"),
@@ -77,7 +77,7 @@ pub async fn list_all_orders(
 
 #[utoipa::path(
     get,
-    path = "/admin/orders/{id}",
+    path = "/api/admin/orders/{id}",
     params(
     (
         "id" = Uuid, Path, description = "Order ID")
@@ -102,7 +102,7 @@ pub async fn get_order_admin(
 
 #[utoipa::path(
     patch,
-    path = "/admin/orders/{id}/status",
+    path = "/api/admin/orders/{id}/status",
     params(
     (
         "id" = Uuid, Path, description = "Order ID")
@@ -129,7 +129,7 @@ pub async fn update_order_status(
 
 #[utoipa::path(
     get,
-    path = "/admin/inventory/low-stock",
+    path = "/api/admin/inventory/low-stock",
     params(
         ("threshold" = Option<i32>, Query, description = "Stock threshold, default 5"),
         ("page" = Option<i64>, Query, description = "Page number, default 1"),
@@ -153,7 +153,7 @@ pub async fn list_low_stock(
 
 #[utoipa::path(
     patch,
-    path = "/admin/inventory/{id}",
+    path = "/api/admin/inventory/{id}",
     params(
     (
         "id" = Uuid, Path, description = "Product ID")

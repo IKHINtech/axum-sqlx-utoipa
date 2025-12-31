@@ -3,22 +3,25 @@ use uuid::Uuid;
 use crate::{
     audit::log_audit,
     dto::favorites::{AddFavoriteRequest, FavoriteProductList},
+    entity::{
+        favorites::{
+            ActiveModel as FavoriteActive, Column as FavCol, Entity as Favorites,
+            Model as FavoriteModel,
+        },
+        products::{Column as ProdCol, Entity as Products},
+    },
     error::{AppError, AppResult},
     middleware::auth::AuthUser,
     models::{Favorite, Product},
     response::{ApiResponse, Meta},
     routes::params::Pagination,
     state::AppState,
-    entity::{
-        favorites::{ActiveModel as FavoriteActive, Column as FavCol, Entity as Favorites, Model as FavoriteModel},
-        products::{Column as ProdCol, Entity as Products},
-    },
 };
+use sea_orm::ActiveValue::NotSet;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityOrSelect, EntityTrait, FromQueryResult,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
-use sea_orm::ActiveValue::NotSet;
 
 pub async fn list_favorites(
     state: &AppState,
@@ -45,7 +48,10 @@ pub async fn list_favorites(
     let rows = Favorites::find()
         .select()
         .column_as(FavCol::ProductId, "favorites.product_id")
-        .join(sea_orm::JoinType::InnerJoin, Favorites::belongs_to(Products).into())
+        .join(
+            sea_orm::JoinType::InnerJoin,
+            Favorites::belongs_to(Products).into(),
+        )
         .column_as(ProdCol::Name, "products.name")
         .column_as(ProdCol::Description, "products.description")
         .column_as(ProdCol::Price, "products.price")

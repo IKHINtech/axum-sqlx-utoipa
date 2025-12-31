@@ -1,6 +1,6 @@
+use crate::models::{Order, OrderItem};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use crate::models::{Order, OrderItem};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CheckoutRequest {

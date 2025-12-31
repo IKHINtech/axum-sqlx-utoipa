@@ -1,15 +1,19 @@
 use utoipa::{
     Modify, OpenApi,
     openapi::{
-        self,
-        OpenApi as OpenApiSpec,
+        self, OpenApi as OpenApiSpec,
         security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
     },
 };
 use utoipa_scalar::{Scalar, Servable};
 
 use crate::{
-    dto::{cart::CartList, favorites::FavoriteProductList, orders::{OrderList, OrderWithItems}, products},
+    dto::{
+        cart::CartList,
+        favorites::FavoriteProductList,
+        orders::{OrderList, OrderWithItems},
+        products,
+    },
     models::{CartItem, Favorite, Order, OrderItem, Product, User},
     response::{ApiResponse, Meta},
     routes::{admin, auth, cart, favorites, health, orders, params, products as product_routes},

@@ -1,4 +1,7 @@
-use axum_ecommerce_api::{config::AppConfig, db::{create_orm_conn, run_migrations}};
+use axum_ecommerce_api::{
+    config::AppConfig,
+    db::{create_orm_conn, run_migrations},
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -1,9 +1,9 @@
+use sea_orm::ActiveValue::NotSet;
+use sea_orm::{ActiveModelTrait, Set};
 use serde_json::Value;
 use uuid::Uuid;
-use sea_orm::{ActiveModelTrait, Set};
-use sea_orm::ActiveValue::NotSet;
 
-use crate::{error::AppResult, state::AppState, entity::audit_logs};
+use crate::{entity::audit_logs, error::AppResult, state::AppState};
 
 pub async fn log_audit(
     state: &AppState,

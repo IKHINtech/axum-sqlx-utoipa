@@ -66,13 +66,15 @@ async fn main() -> anyhow::Result<()> {
                 "request started"
             );
         })
-        .on_response(|response: &Response<_>, latency: Duration, _span: &tracing::Span| {
-            tracing::info!(
-                status = %response.status(),
-                ms = %latency.as_millis(),
-                "request finished"
-            );
-        });
+        .on_response(
+            |response: &Response<_>, latency: Duration, _span: &tracing::Span| {
+                tracing::info!(
+                    status = %response.status(),
+                    ms = %latency.as_millis(),
+                    "request finished"
+                );
+            },
+        );
 
     let app_state = AppState { orm };
 
@@ -82,13 +84,8 @@ async fn main() -> anyhow::Result<()> {
         .merge(scalar_docs())
         .fallback(not_found)
         .layer(trace_layer)
-        .layer(PropagateRequestIdLayer::new(
-            request_id_header.clone(),
-        ))
-        .layer(SetRequestIdLayer::new(
-            request_id_header,
-            MakeRequestUuid,
-        ))
+        .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
+        .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))
         .layer(RequestBodyLimitLayer::new(1024 * 1024))
         .layer(concurrency_limit_layer)
         .with_state(app_state);

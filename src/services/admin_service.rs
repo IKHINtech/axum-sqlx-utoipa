@@ -1,27 +1,32 @@
-use uuid::Uuid;
 use chrono::Utc;
+use sea_orm::ActiveValue::Set;
+use sea_orm::sea_query::LockType;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, TransactionTrait,
 };
-use sea_orm::sea_query::LockType;
-use sea_orm::ActiveValue::Set;
+use uuid::Uuid;
 
 use crate::{
     audit::log_audit,
+    dto::orders::OrderList,
+    dto::orders::OrderWithItems,
     entity::{
         order_items::{Column as OrderItemCol, Entity as OrderItems, Model as OrderItemModel},
-        orders::{ActiveModel as OrderActive, Column as OrderCol, Entity as Orders, Model as OrderModel},
-        products::{ActiveModel as ProductActive, Column as ProdCol, Entity as Products, Model as ProductModel},
+        orders::{
+            ActiveModel as OrderActive, Column as OrderCol, Entity as Orders, Model as OrderModel,
+        },
+        products::{
+            ActiveModel as ProductActive, Column as ProdCol, Entity as Products,
+            Model as ProductModel,
+        },
     },
-    dto::orders::OrderWithItems,
     error::{AppError, AppResult},
     middleware::auth::{AuthUser, ensure_admin},
     models::{Order, OrderItem, Product},
     response::{ApiResponse, Meta},
-    routes::params::{OrderListQuery, SortOrder},
     routes::admin::{InventoryAdjustRequest, LowStockQuery, ProductList, UpdateOrderStatusRequest},
-    dto::orders::OrderList,
+    routes::params::{OrderListQuery, SortOrder},
     state::AppState,
 };
 

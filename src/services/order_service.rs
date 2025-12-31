@@ -1,28 +1,33 @@
 use chrono::Utc;
+use sea_orm::ActiveValue::NotSet;
+use sea_orm::sea_query::Expr;
+use sea_orm::sea_query::LockType;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityOrSelect, EntityTrait, FromQueryResult,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
-use sea_orm::ActiveValue::NotSet;
-use sea_orm::sea_query::LockType;
-use sea_orm::sea_query::Expr;
 use uuid::Uuid;
 
 use crate::{
     audit::log_audit,
     dto::orders::{CheckoutRequest, OrderList, OrderWithItems, PayOrderRequest},
+    entity::{
+        cart_items::{Column as CartCol, Entity as CartItems},
+        order_items::{
+            ActiveModel as OrderItemActive, Column as OrderItemCol, Entity as OrderItems,
+            Model as OrderItemModel,
+        },
+        orders::{
+            ActiveModel as OrderActive, Column as OrderCol, Entity as Orders, Model as OrderModel,
+        },
+        products::{Column as ProdCol, Entity as Products},
+    },
     error::{AppError, AppResult},
     middleware::auth::AuthUser,
     models::{Order, OrderItem},
     response::{ApiResponse, Meta},
     routes::params::{OrderListQuery, SortOrder},
     state::AppState,
-    entity::{
-        cart_items::{Column as CartCol, Entity as CartItems},
-        orders::{ActiveModel as OrderActive, Column as OrderCol, Entity as Orders, Model as OrderModel},
-        order_items::{ActiveModel as OrderItemActive, Column as OrderItemCol, Entity as OrderItems, Model as OrderItemModel},
-        products::{Column as ProdCol, Entity as Products},
-    },
 };
 
 pub async fn list_orders(
@@ -86,7 +91,10 @@ pub async fn checkout(
         .select()
         .column_as(CartCol::ProductId, "cart_items.product_id")
         .column_as(CartCol::Quantity, "cart_items.quantity")
-        .join(sea_orm::JoinType::InnerJoin, CartItems::belongs_to(Products).into())
+        .join(
+            sea_orm::JoinType::InnerJoin,
+            CartItems::belongs_to(Products).into(),
+        )
         .column_as(ProdCol::Price, "products.price")
         .column_as(ProdCol::Stock, "products.stock")
         .filter(CartCol::UserId.eq(user.user_id))

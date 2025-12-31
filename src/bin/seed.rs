@@ -1,17 +1,19 @@
 use argon2::{
     Argon2, PasswordHasher,
-    password_hash::{rand_core::OsRng, SaltString},
+    password_hash::{SaltString, rand_core::OsRng},
 };
 use axum_ecommerce_api::{
     config::AppConfig,
     db::{create_orm_conn, run_migrations},
     entity::{
         products::{ActiveModel as ProductActive, Column as ProdCol, Entity as Products},
-        users::{ActiveModel as UserActive, Column as UserCol, Entity as Users, Model as UserModel},
+        users::{
+            ActiveModel as UserActive, Column as UserCol, Entity as Users, Model as UserModel,
+        },
     },
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use sea_orm::ActiveValue::NotSet;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
 #[tokio::main]
@@ -31,11 +33,19 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn ensure_admin(orm: &sea_orm::DatabaseConnection, email: &str, password: &str) -> anyhow::Result<Uuid> {
+async fn ensure_admin(
+    orm: &sea_orm::DatabaseConnection,
+    email: &str,
+    password: &str,
+) -> anyhow::Result<Uuid> {
     ensure_user_with_role(orm, email, password, "admin").await
 }
 
-async fn ensure_user(orm: &sea_orm::DatabaseConnection, email: &str, password: &str) -> anyhow::Result<Uuid> {
+async fn ensure_user(
+    orm: &sea_orm::DatabaseConnection,
+    email: &str,
+    password: &str,
+) -> anyhow::Result<Uuid> {
     ensure_user_with_role(orm, email, password, "user").await
 }
 
@@ -55,7 +65,8 @@ async fn ensure_user_with_role(
     if let Some(existing) = Users::find()
         .filter(UserCol::Email.eq(email.to_string()))
         .one(orm)
-        .await? {
+        .await?
+    {
         if existing.role != role {
             let mut active: UserActive = existing.clone().into();
             active.role = Set(role.to_string());
@@ -82,13 +93,26 @@ async fn ensure_user_with_role(
 async fn seed_products(orm: &sea_orm::DatabaseConnection) -> anyhow::Result<()> {
     let products = vec![
         ("Axum Hoodie", "Warm hoodie for Rustaceans", 550000, 50),
-        ("Ferris Mug", "Coffee tastes better with Ferris", 120000, 100),
+        (
+            "Ferris Mug",
+            "Coffee tastes better with Ferris",
+            120000,
+            100,
+        ),
         ("Rust Sticker Pack", "Decorate your laptop", 50000, 200),
-        ("E-book: Async Rust", "Learn async Rust patterns", 250000, 75),
+        (
+            "E-book: Async Rust",
+            "Learn async Rust patterns",
+            250000,
+            75,
+        ),
     ];
 
     for (name, desc, price, stock) in products {
-        let existing = Products::find().filter(ProdCol::Name.eq(name)).one(orm).await?;
+        let existing = Products::find()
+            .filter(ProdCol::Name.eq(name))
+            .one(orm)
+            .await?;
         if existing.is_some() {
             continue;
         }

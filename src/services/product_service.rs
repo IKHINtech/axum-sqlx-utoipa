@@ -1,24 +1,24 @@
 use uuid::Uuid;
 
+use crate::dto::products::{CreateProductRequest, ProductList, UpdateProductRequest};
 use crate::{
     audit::log_audit,
     entity::products::{ActiveModel, Column, Entity as Products, Model as ProductModel},
-    state::AppState,
     error::{AppError, AppResult},
     middleware::auth::{AuthUser, ensure_admin},
     models::Product,
     response::{ApiResponse, Meta},
     routes::params::{ProductQuery, ProductSortBy, SortOrder},
+    state::AppState,
 };
-use crate::dto::products::{CreateProductRequest, ProductList, UpdateProductRequest};
+use chrono::Utc;
+use sea_orm::ActiveValue::NotSet;
+use sea_orm::sea_query::Expr;
+use sea_orm::sea_query::extension::postgres::PgExpr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, Set,
 };
-use sea_orm::sea_query::Expr;
-use sea_orm::sea_query::extension::postgres::PgExpr;
-use sea_orm::ActiveValue::NotSet;
-use chrono::Utc;
 
 pub async fn list_products(
     state: &AppState,
@@ -129,9 +129,7 @@ pub async fn update_product(
     payload: UpdateProductRequest,
 ) -> AppResult<ApiResponse<Product>> {
     ensure_admin(user)?;
-    let existing = Products::find_by_id(id)
-        .one(&state.orm)
-        .await?;
+    let existing = Products::find_by_id(id).one(&state.orm).await?;
     let existing = match existing {
         Some(p) => p,
         None => return Err(AppError::NotFound),

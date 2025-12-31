@@ -5,19 +5,21 @@ use argon2::{
 use chrono::{Duration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use password_hash::rand_core::OsRng;
-use uuid::Uuid;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use sea_orm::ActiveValue::NotSet;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use uuid::Uuid;
 
+use crate::dto::auth::{Claims, LoginRequest, LoginResponse, RegisterRequest};
 use crate::{
     audit::log_audit,
+    entity::users::{
+        ActiveModel as UserActive, Column as UserCol, Entity as Users, Model as UserModel,
+    },
     error::{AppError, AppResult},
     models::User,
     response::{ApiResponse, Meta},
     state::AppState,
-    entity::users::{ActiveModel as UserActive, Column as UserCol, Entity as Users, Model as UserModel},
 };
-use crate::dto::auth::{Claims, LoginRequest, LoginResponse, RegisterRequest};
 
 pub async fn register_user(
     state: &AppState,
@@ -60,7 +62,11 @@ pub async fn register_user(
     {
         tracing::warn!(error = %err, "audit log failed");
     }
-    Ok(ApiResponse::success("User created", user_from_entity(user), None))
+    Ok(ApiResponse::success(
+        "User created",
+        user_from_entity(user),
+        None,
+    ))
 }
 
 pub async fn login_user(
@@ -126,11 +132,7 @@ pub async fn login_user(
         tracing::warn!(error = %err, "audit log failed");
     }
 
-    Ok(ApiResponse::success(
-        "Logged in",
-        resp,
-        Some(Meta::empty()),
-    ))
+    Ok(ApiResponse::success("Logged in", resp, Some(Meta::empty())))
 }
 
 fn user_from_entity(model: UserModel) -> User {

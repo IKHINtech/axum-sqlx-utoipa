@@ -6,12 +6,12 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
+    dto::cart::{AddToCartRequest, CartList},
     error::AppResult,
     middleware::auth::AuthUser,
     models::CartItem,
     response::ApiResponse,
     routes::params::Pagination,
-    dto::cart::{AddToCartRequest, CartList},
     services::cart_service,
     state::AppState,
 };

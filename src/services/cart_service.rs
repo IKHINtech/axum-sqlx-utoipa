@@ -1,5 +1,11 @@
 use uuid::Uuid;
 
+use crate::entity::{
+    cart_items::{
+        ActiveModel as CartActive, Column as CartCol, Entity as CartItems, Relation as CartRel,
+    },
+    products::{Column as ProdCol, Entity as Products},
+};
 use crate::{
     audit::log_audit,
     dto::cart::{AddToCartRequest, CartItemDto, CartList},
@@ -10,14 +16,11 @@ use crate::{
     routes::params::Pagination,
     state::AppState,
 };
+use sea_orm::ActiveValue::NotSet;
+use sea_orm::RelationTrait;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityOrSelect, EntityTrait, FromQueryResult,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
-};
-use sea_orm::ActiveValue::NotSet;
-use crate::entity::{
-    cart_items::{ActiveModel as CartActive, Column as CartCol, Entity as CartItems},
-    products::{Column as ProdCol, Entity as Products},
 };
 
 pub async fn list_cart(
@@ -51,7 +54,8 @@ pub async fn list_cart(
         .column_as(CartCol::Id, "cart_items.id")
         .column_as(CartCol::ProductId, "cart_items.product_id")
         .column_as(CartCol::Quantity, "cart_items.quantity")
-        .join(sea_orm::JoinType::InnerJoin, CartItems::belongs_to(Products).into())
+        // Use the generated relation so SeaORM knows the FK columns
+        .join(sea_orm::JoinType::InnerJoin, CartRel::Products.def())
         .column_as(ProdCol::Name, "products.name")
         .column_as(ProdCol::Description, "products.description")
         .column_as(ProdCol::Price, "products.price")

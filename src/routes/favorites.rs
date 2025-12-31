@@ -6,12 +6,12 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
+    dto::favorites::{AddFavoriteRequest, FavoriteProductList},
     error::AppResult,
     middleware::auth::AuthUser,
     models::Favorite,
     response::ApiResponse,
     routes::params::Pagination,
-    dto::favorites::{AddFavoriteRequest, FavoriteProductList},
     services::favorite_service,
     state::AppState,
 };

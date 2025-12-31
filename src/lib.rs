@@ -1,12 +1,12 @@
 pub mod audit;
 pub mod config;
 pub mod db;
+pub mod dto;
+pub mod entity;
 pub mod error;
 pub mod middleware;
 pub mod models;
 pub mod response;
 pub mod routes;
-pub mod dto;
 pub mod services;
-pub mod entity;
 pub mod state;

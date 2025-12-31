@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sea_orm::{Database, DatabaseConnection, Statement, ConnectionTrait};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -24,7 +24,17 @@ pub async fn run_migrations(conn: &DatabaseConnection) -> Result<()> {
     let backend = conn.get_database_backend();
     for file in files {
         let sql = fs::read_to_string(&file).await?;
-        conn.execute(Statement::from_string(backend, sql)).await?;
+        // Postgres prepared statements cannot contain multiple commands,
+        // so split the migration file and run each statement individually.
+        for stmt in sql.split(';') {
+            let stmt = stmt.trim();
+            if stmt.is_empty() {
+                continue;
+            }
+            let statement = format!("{stmt};");
+            conn.execute(Statement::from_string(backend, statement))
+                .await?;
+        }
     }
 
     Ok(())
