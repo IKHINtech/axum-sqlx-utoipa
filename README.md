@@ -4,7 +4,7 @@ Axum-based REST API for a lightweight e-commerce backend: products, carts, order
 
 ## Stack
 - Rust 2024, Axum 0.8, tower-http layers (request-id propagation, tracing, body limits, concurrency cap)
-- SQLx (PostgreSQL) migrations + queries, chrono/uuid
+- SeaORM (PostgreSQL) with raw SQL migrations (executed in order), chrono/uuid
 - Auth: Argon2 password hashing, JWT (bearer), role-based guards (admin)
 - Docs/UI: utoipa + Scalar at `/docs`
 - Observability: tracing-subscriber, request IDs, audit logs
@@ -30,8 +30,9 @@ Axum-based REST API for a lightweight e-commerce backend: products, carts, order
 - Test: `cargo test --all-features`
 - Format: `cargo fmt`
 - Make targets: see `Makefile` (`make setup`, `make dev`, `make lint`, `make test`, `make migrate`, `make docker-build`, `make compose-up/down`).
+- Migrate: `make migrate` (runs SQL files in `migrations/` via `cargo run --bin migrate`).
 - Seed sample data: `make seed` (creates admin/user accounts + demo products; runs migrations first).
-- ORM: SQLx in use; SeaORM dependencies/entities added for migration path (see `src/entity/` and `create_orm_conn` in `src/db.rs`).
+- ORM: SeaORM entities live in `src/entity/`; services query via SeaORM with transactions for checkout/payment/admin flows.
 
 ## Endpoints (high level)
 - `GET /health` – health check
@@ -56,10 +57,11 @@ All protected routes expect `Authorization: Bearer <token>`; admin-only routes e
 
 ## Project layout
 - `src/routes/` – route handlers (auth, products, cart, orders, favorites, admin, docs, health)
-- `src/models.rs` – SQLx models
+- `src/models.rs` – response/domain structs
 - `src/middleware/auth.rs` – JWT extractor & role checks
 - `src/response.rs` – `ApiResponse` + pagination meta
-- `migrations/` – SQLx migrations
+- `src/entity/` – SeaORM entities + relations
+- `migrations/` – raw SQL migrations (executed in filename order)
 - `bacon.toml` – dev tasks/watch config
 - `Makefile` – common dev shortcuts
 - `Dockerfile`, `docker-compose.yml` – containerized app + Postgres
@@ -67,7 +69,7 @@ All protected routes expect `Authorization: Bearer <token>`; admin-only routes e
 
 ## Running migrations manually (optional)
 ```sh
-cargo sqlx migrate run
+cargo run --bin migrate
 ```
 (Runtime also applies migrations automatically on startup.)
 
@@ -89,4 +91,5 @@ cargo sqlx migrate run
 2) Run `make setup` to create `.env` from `.env.example`.
 3) Adjust names (crate/package) if desired, and set `JWT_SECRET`.
 4) Start Postgres via `docker compose up` (or your own DB) and run `cargo run` or `make dev`.
-5) Update `README`/migrations/models/routes` as you build your own domain.
+5) Apply migrations with `make migrate`, seed sample data with `make seed` if needed.
+6) Update `README`/migrations/models/routes` as you build your own domain.
