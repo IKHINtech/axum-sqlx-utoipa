@@ -1,82 +1,99 @@
 use chrono::Utc;
-use sqlx::QueryBuilder;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Condition, EntityOrSelect, EntityTrait, FromQueryResult,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
+};
+use sea_orm::ActiveValue::NotSet;
+use sea_orm::sea_query::LockType;
+use sea_orm::sea_query::Expr;
 use uuid::Uuid;
 
 use crate::{
     audit::log_audit,
-    db::DbPool,
     dto::orders::{CheckoutRequest, OrderList, OrderWithItems, PayOrderRequest},
     error::{AppError, AppResult},
     middleware::auth::AuthUser,
     models::{Order, OrderItem},
     response::{ApiResponse, Meta},
     routes::params::{OrderListQuery, SortOrder},
+    state::AppState,
+    entity::{
+        cart_items::{Column as CartCol, Entity as CartItems},
+        orders::{ActiveModel as OrderActive, Column as OrderCol, Entity as Orders, Model as OrderModel},
+        order_items::{ActiveModel as OrderItemActive, Column as OrderItemCol, Entity as OrderItems, Model as OrderItemModel},
+        products::{Column as ProdCol, Entity as Products},
+    },
 };
 
-#[derive(sqlx::FromRow)]
-pub struct CartProductRow {
-    product_id: Uuid,
-    quantity: i32,
-    price: i64,
-    stock: i32,
-}
-
 pub async fn list_orders(
-    db: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     query: OrderListQuery,
 ) -> AppResult<ApiResponse<OrderList>> {
     let (page, limit, offset) = query.pagination.normalize();
-    let mut list_builder = QueryBuilder::new("SELECT * FROM orders WHERE user_id = ");
-    list_builder.push_bind(user.user_id);
-    let mut count_builder = QueryBuilder::new("SELECT COUNT(*) FROM orders WHERE user_id = ");
-    count_builder.push_bind(user.user_id);
-
+    let mut condition = Condition::all().add(OrderCol::UserId.eq(user.user_id));
     if let Some(status) = query.status.as_ref().filter(|s| !s.is_empty()) {
-        list_builder.push(" AND status = ").push_bind(status);
-        count_builder.push(" AND status = ").push_bind(status);
+        condition = condition.add(OrderCol::Status.eq(status.clone()));
     }
 
     let sort_order = query.sort_order.unwrap_or(SortOrder::Desc);
-    list_builder
-        .push(" ORDER BY created_at ")
-        .push(sort_order.as_sql())
-        .push(" LIMIT ")
-        .push_bind(limit)
-        .push(" OFFSET ")
-        .push_bind(offset);
 
-    let orders = list_builder
-        .build_query_as::<Order>()
-        .fetch_all(db)
-        .await?;
+    let mut finder = Orders::find().filter(condition);
+    finder = match sort_order {
+        SortOrder::Asc => finder.order_by_asc(OrderCol::CreatedAt),
+        SortOrder::Desc => finder.order_by_desc(OrderCol::CreatedAt),
+    };
 
-    let total: (i64,) = count_builder.build_query_as().fetch_one(db).await?;
+    let total = finder.clone().count(&state.orm).await? as i64;
 
-    let meta = Meta::new(page, limit, total.0);
-    let data = OrderList { items: orders };
-    Ok(ApiResponse::success("Ok", data, Some(meta)))
+    let orders = finder
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .all(&state.orm)
+        .await?
+        .into_iter()
+        .map(order_from_entity)
+        .collect();
+
+    let meta = Meta::new(page, limit, total);
+    Ok(ApiResponse::success(
+        "Ok",
+        OrderList { items: orders },
+        Some(meta),
+    ))
 }
 
 pub async fn checkout(
-    pool: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     _payload: CheckoutRequest,
 ) -> AppResult<ApiResponse<OrderWithItems>> {
-    let mut tx = pool.begin().await?;
+    let txn = state.orm.begin().await?;
 
-    let rows = sqlx::query_as::<_, CartProductRow>(
-        r#"
-        SELECT ci.product_id, ci.quantity, p.price, p.stock
-        FROM cart_items ci
-        JOIN products p ON p.id = ci.product_id
-        WHERE ci.user_id = $1
-        FOR UPDATE
-        "#,
-    )
-    .bind(user.user_id)
-    .fetch_all(&mut *tx)
-    .await?;
+    #[derive(Debug, FromQueryResult)]
+    struct CartProductRow {
+        #[sea_orm(column_name = "cart_items.product_id")]
+        product_id: Uuid,
+        #[sea_orm(column_name = "cart_items.quantity")]
+        quantity: i32,
+        #[sea_orm(column_name = "products.price")]
+        price: i64,
+        #[sea_orm(column_name = "products.stock")]
+        stock: i32,
+    }
+
+    let rows = CartItems::find()
+        .select()
+        .column_as(CartCol::ProductId, "cart_items.product_id")
+        .column_as(CartCol::Quantity, "cart_items.quantity")
+        .join(sea_orm::JoinType::InnerJoin, CartItems::belongs_to(Products).into())
+        .column_as(ProdCol::Price, "products.price")
+        .column_as(ProdCol::Stock, "products.stock")
+        .filter(CartCol::UserId.eq(user.user_id))
+        .lock(LockType::Update)
+        .into_model::<CartProductRow>()
+        .all(&txn)
+        .await?;
 
     if rows.is_empty() {
         return Err(AppError::BadRequest("Cart is empty".into()));
@@ -99,64 +116,54 @@ pub async fn checkout(
     let order_id = Uuid::new_v4();
     let invoice_number = build_invoice_number(order_id);
 
-    let order = sqlx::query_as::<_, Order>(
-        r#"
-        INSERT INTO orders (id, user_id, total_amount, status, payment_status, invoice_number)
-        VALUES ($1, $2, $3, 'pending', 'unpaid', $4)
-        RETURNING *
-        "#,
-    )
-    .bind(order_id)
-    .bind(user.user_id)
-    .bind(total_amount)
-    .bind(invoice_number)
-    .fetch_one(&mut *tx)
+    let order = OrderActive {
+        id: Set(order_id),
+        user_id: Set(user.user_id),
+        total_amount: Set(total_amount),
+        status: Set("pending".into()),
+        payment_status: Set("unpaid".into()),
+        invoice_number: Set(invoice_number),
+        paid_at: Set(None),
+        created_at: NotSet,
+        updated_at: NotSet,
+    }
+    .insert(&txn)
     .await?;
 
     let mut order_items: Vec<OrderItem> = Vec::new();
 
     for row in &rows {
-        let item_id = Uuid::new_v4();
-
-        let item = sqlx::query_as::<_, OrderItem>(
-            r#"
-            INSERT INTO order_items (id, order_id, product_id, quantity, price)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *
-            "#,
-        )
-        .bind(item_id)
-        .bind(order.id)
-        .bind(row.product_id)
-        .bind(row.quantity)
-        .bind(row.price)
-        .fetch_one(&mut *tx)
+        let item = OrderItemActive {
+            id: Set(Uuid::new_v4()),
+            order_id: Set(order.id),
+            product_id: Set(row.product_id),
+            quantity: Set(row.quantity),
+            price: Set(row.price),
+            created_at: NotSet,
+        }
+        .insert(&txn)
         .await?;
 
-        order_items.push(item);
+        order_items.push(order_item_from_entity(item));
 
-        sqlx::query(
-            r#"
-            UPDATE products
-            SET stock = stock - $2
-            WHERE id = $1
-            "#,
-        )
-        .bind(row.product_id)
-        .bind(row.quantity)
-        .execute(&mut *tx)
-        .await?;
+        // reduce stock
+        Products::update_many()
+            .col_expr(ProdCol::Stock, Expr::col(ProdCol::Stock).sub(row.quantity))
+            .filter(ProdCol::Id.eq(row.product_id))
+            .exec(&txn)
+            .await?;
     }
 
-    sqlx::query("DELETE FROM cart_items WHERE user_id = $1")
-        .bind(user.user_id)
-        .execute(&mut *tx)
+    // clear cart
+    CartItems::delete_many()
+        .filter(CartCol::UserId.eq(user.user_id))
+        .exec(&txn)
         .await?;
 
-    tx.commit().await?;
+    txn.commit().await?;
 
     if let Err(err) = log_audit(
-        pool,
+        &state.pool,
         Some(user.user_id),
         "checkout",
         Some("orders"),
@@ -167,34 +174,34 @@ pub async fn checkout(
         tracing::warn!(error = %err, "audit log failed");
     }
 
-    let data = OrderWithItems {
-        order,
-        items: order_items,
-    };
-
     Ok(ApiResponse::success(
         "Checkout success",
-        data,
+        OrderWithItems {
+            order: order_from_entity(order),
+            items: order_items,
+        },
         Some(Meta::empty()),
     ))
 }
 
 pub async fn pay_order(
-    pool: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     id: Uuid,
     _payload: PayOrderRequest,
 ) -> AppResult<ApiResponse<OrderWithItems>> {
-    let mut tx = pool.begin().await?;
+    let txn = state.orm.begin().await?;
 
-    let order = sqlx::query_as::<_, Order>(
-        "SELECT * FROM orders WHERE user_id = $1 AND id = $2 FOR UPDATE",
-    )
-    .bind(user.user_id)
-    .bind(id)
-    .fetch_optional(&mut *tx)
-    .await?;
-    let mut order = match order {
+    let order = Orders::find()
+        .filter(
+            Condition::all()
+                .add(OrderCol::UserId.eq(user.user_id))
+                .add(OrderCol::Id.eq(id)),
+        )
+        .lock(LockType::Update)
+        .one(&txn)
+        .await?;
+    let order = match order {
         Some(o) => o,
         None => return Err(AppError::NotFound),
     };
@@ -203,30 +210,25 @@ pub async fn pay_order(
         return Err(AppError::BadRequest("Order already paid".into()));
     }
 
-    order = sqlx::query_as::<_, Order>(
-        r#"
-        UPDATE orders
-        SET payment_status = 'paid',
-            status = 'paid',
-            paid_at = NOW(),
-            updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-        "#,
-    )
-    .bind(order.id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let mut active: OrderActive = order.into();
+    active.payment_status = Set("paid".into());
+    active.status = Set("paid".into());
+    active.paid_at = Set(Some(Utc::now().into()));
+    active.updated_at = Set(Utc::now().into());
+    let order = active.update(&txn).await?;
 
-    let items = sqlx::query_as::<_, OrderItem>("SELECT * FROM order_items WHERE order_id = $1")
-        .bind(order.id)
-        .fetch_all(&mut *tx)
-        .await?;
+    let items = OrderItems::find()
+        .filter(OrderItemCol::OrderId.eq(order.id))
+        .all(&txn)
+        .await?
+        .into_iter()
+        .map(order_item_from_entity)
+        .collect();
 
-    tx.commit().await?;
+    txn.commit().await?;
 
     if let Err(err) = log_audit(
-        pool,
+        &state.pool,
         Some(user.user_id),
         "order_paid",
         Some("orders"),
@@ -237,37 +239,75 @@ pub async fn pay_order(
         tracing::warn!(error = %err, "audit log failed");
     }
 
-    let data = OrderWithItems { order, items };
     Ok(ApiResponse::success(
         "Payment recorded",
-        data,
+        OrderWithItems {
+            order: order_from_entity(order),
+            items,
+        },
         Some(Meta::empty()),
     ))
 }
 
 pub async fn get_order(
-    db: &DbPool,
+    state: &AppState,
     user: &AuthUser,
     id: Uuid,
 ) -> AppResult<ApiResponse<OrderWithItems>> {
-    let order = sqlx::query_as::<_, Order>("SELECT * FROM orders WHERE user_id = $1 AND id = $2")
-        .bind(user.user_id)
-        .bind(id)
-        .fetch_optional(db)
+    let order = Orders::find()
+        .filter(
+            Condition::all()
+                .add(OrderCol::UserId.eq(user.user_id))
+                .add(OrderCol::Id.eq(id)),
+        )
+        .one(&state.orm)
         .await?;
     let order = match order {
         Some(o) => o,
         None => return Err(AppError::NotFound),
     };
 
-    let items = sqlx::query_as::<_, OrderItem>("SELECT * FROM order_items WHERE order_id = $1")
-        .bind(order.id)
-        .fetch_all(db)
-        .await?;
+    let items = OrderItems::find()
+        .filter(OrderItemCol::OrderId.eq(order.id))
+        .all(&state.orm)
+        .await?
+        .into_iter()
+        .map(order_item_from_entity)
+        .collect();
 
-    let data = OrderWithItems { order, items };
+    Ok(ApiResponse::success(
+        "OK",
+        OrderWithItems {
+            order: order_from_entity(order),
+            items,
+        },
+        Some(Meta::empty()),
+    ))
+}
 
-    Ok(ApiResponse::success("OK", data, Some(Meta::empty())))
+fn order_from_entity(model: OrderModel) -> Order {
+    Order {
+        id: model.id,
+        user_id: model.user_id,
+        total_amount: model.total_amount,
+        status: model.status,
+        payment_status: model.payment_status,
+        invoice_number: model.invoice_number,
+        paid_at: model.paid_at.map(|dt| dt.with_timezone(&Utc)),
+        created_at: model.created_at.with_timezone(&Utc),
+        updated_at: model.updated_at.with_timezone(&Utc),
+    }
+}
+
+fn order_item_from_entity(model: OrderItemModel) -> OrderItem {
+    OrderItem {
+        id: model.id,
+        order_id: model.order_id,
+        product_id: model.product_id,
+        quantity: model.quantity,
+        price: model.price,
+        created_at: model.created_at.with_timezone(&Utc),
+    }
 }
 
 fn build_invoice_number(order_id: Uuid) -> String {

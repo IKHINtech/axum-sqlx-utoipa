@@ -43,7 +43,7 @@ pub async fn list_order(
     user: AuthUser,
     Query(query): Query<OrderListQuery>,
 ) -> AppResult<Json<ApiResponse<OrderList>>> {
-    let resp = order_service::list_orders(&state.pool, &user, query).await?;
+    let resp = order_service::list_orders(&state, &user, query).await?;
     Ok(Json(resp))
 }
 
@@ -63,7 +63,7 @@ pub async fn checkout(
     user: AuthUser,
     Json(payload): Json<CheckoutRequest>,
 ) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
-    let resp = order_service::checkout(&state.pool, &user, payload).await?;
+    let resp = order_service::checkout(&state, &user, payload).await?;
     Ok(Json(resp))
 }
 
@@ -88,7 +88,7 @@ pub async fn pay_order(
     Path(id): Path<Uuid>,
     Json(payload): Json<PayOrderRequest>,
 ) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
-    let resp = order_service::pay_order(&state.pool, &user, id, payload).await?;
+    let resp = order_service::pay_order(&state, &user, id, payload).await?;
     Ok(Json(resp))
 }
 
@@ -110,6 +110,6 @@ pub async fn get_order(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ApiResponse<OrderWithItems>>> {
-    let resp = order_service::get_order(&state.pool, &user, id).await?;
+    let resp = order_service::get_order(&state, &user, id).await?;
     Ok(Json(resp))
 }
